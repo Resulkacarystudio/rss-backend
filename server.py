@@ -44,46 +44,56 @@ RSS_SOURCES = {
 
 def _safe_parse_dt(text: str):
     """
-    Metin tarihini datetime'e çevirmeye çalışır (tz-aware).
+    Metin tarihini datetime'e çevirmeye çalışır (tz-aware olabilir).
     Başarısız olursa None döner.
     """
     if not text:
         return None
     try:
-        dt = parsedate_to_datetime(text)
-        return dt
+        return parsedate_to_datetime(text)
     except Exception:
         return None
 
 def parse_date(entry):
     """
-    RSS tarih bilgisini tz-aware UTC datetime'e çevirir.
-    CNN gibi tz-aware tarihleri direkt UTC'ye çevirir.
-    Diğer tzinfo'suz tarihleri ise Istanbul kabul edip UTC'ye çevirir.
+    RSS tarih bilgisini tz-aware **İstanbul saati (LOCAL_TZ)** datetime'e çevirir.
+    - TZ varsa: IST'ye çevirir.
+    - TZ yoksa: İstanbul kabul eder.
+    - Hiç bulunamazsa: 100 yıl öncesi (sıralamada en alta düşsün).
     """
     dt = None
-    try:
-        if hasattr(entry, "published") and entry.published:
-            dt = parsedate_to_datetime(entry.published)
-        elif hasattr(entry, "updated") and entry.updated:
-            dt = parsedate_to_datetime(entry.updated)
-    except Exception:
-        dt = None
 
+    # 1) Metinsel alanlardan dene
+    for key in ("published", "updated"):
+        if hasattr(entry, key) and getattr(entry, key):
+            dt = _safe_parse_dt(getattr(entry, key))
+            if dt:
+                break
+
+    # 2) feedparser struct_time fallback (genelde UTC/GMT kabul edilir)
     if not dt:
-        return datetime.now(timezone.utc) - timedelta(days=365*100)
+        try:
+            if getattr(entry, "published_parsed", None):
+                dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+            elif getattr(entry, "updated_parsed", None):
+                dt = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
+        except Exception:
+            dt = None
 
-    # CNN → tz-aware → direk UTC'ye çevir
-    if dt.tzinfo:
-        return dt.astimezone(timezone.utc)
+    # 3) Hâlâ yoksa çok eski bir tarih ver (tz-aware)
+    if not dt:
+        return (datetime.now(LOCAL_TZ) - timedelta(days=365*100))
 
-    # Milliyet/Hürriyet gibi tzinfo yoksa → Istanbul say, UTC’ye çevir
-    dt = LOCAL_TZ.localize(dt).astimezone(timezone.utc)
-    return dt
-
+    # 4) İstanbul saatine normalize et
+    if dt.tzinfo is None:
+        # TZ yoksa: direkt İstanbul say
+        return LOCAL_TZ.localize(dt)
+    else:
+        # TZ varsa: İstanbul saatine çevir
+        return dt.astimezone(LOCAL_TZ)
 
 def fetch_rss():
-    """Tüm kaynaklardan haberleri getir ve tarihe göre (UTC) sırala"""
+    """Tüm kaynaklardan haberleri getir ve **İstanbul saatine göre** sırala (en yeni → en eski)."""
     items = []
     for source, info in RSS_SOURCES.items():
         try:
@@ -103,7 +113,8 @@ def fetch_rss():
                     if img_tag and img_tag.get("src"):
                         img_url = img_tag["src"]
 
-                pub_dt_utc = parse_date(entry)  # tz-aware UTC datetime
+                # İstanbul saati olarak normalize edilmiş tz-aware datetime
+                pub_dt_ist = parse_date(entry)
 
                 items.append({
                     "source": source,
@@ -112,17 +123,19 @@ def fetch_rss():
                     "title": entry.get("title", "Başlık Yok"),
                     "link": entry.get("link", ""),
                     "pubDate": entry.get("published", "") or entry.get("updated", ""),
-                    # ISO'yu her zaman Z (UTC) ile bitirecek şekilde yaz
-                    "published_at": pub_dt_utc.isoformat().replace("+00:00", "Z"),
+                    # IST (+03:00) ISO
+                    "published_at_local": pub_dt_ist.isoformat(),
+                    # UTC (Z) ISO
+                    "published_at_utc": pub_dt_ist.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    # Sıralama ve frontend için önerilen alan
+                    "published_at_ms": int(pub_dt_ist.timestamp() * 1000),
                     "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text() if "description" in entry else "",
-                    "image": img_url,
-                    # Sıralama için epoch (ms) ekleyelim (frontend ihtiyaç duyarsa hazır)
-                    "published_at_ms": int(pub_dt_utc.timestamp() * 1000)
+                    "image": img_url
                 })
         except Exception as e:
             print(f"{info['url']} okunamadı:", e)
 
-    # 🔥 UTC datetime değerine göre sırala (en yeni → en eski)
+    # 🔥 İstanbul saatine göre epoch ms ile sırala (en yeni → en eski)
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
     return items
 
