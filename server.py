@@ -58,41 +58,29 @@ def _safe_parse_dt(text: str):
 def parse_date(entry):
     """
     RSS tarih bilgisini tz-aware UTC datetime'e çevirir.
-    - TZ varsa: UTC'ye çevirir.
-    - TZ yoksa: İstanbul kabul eder ve UTC'ye çevirir.
-    - Yoksa: 100 yıl önce gibi çok eski bir tarih döndürür (sıralamayı bozmasın).
+    CNN gibi tz-aware tarihleri direkt UTC'ye çevirir.
+    Diğer tzinfo'suz tarihleri ise Istanbul kabul edip UTC'ye çevirir.
     """
     dt = None
-    # 1) Metinsel alanlardan dene
-    for key in ("published", "updated"):
-        if hasattr(entry, key):
-            dt = _safe_parse_dt(getattr(entry, key, None))
-            if dt:
-                break
+    try:
+        if hasattr(entry, "published") and entry.published:
+            dt = parsedate_to_datetime(entry.published)
+        elif hasattr(entry, "updated") and entry.updated:
+            dt = parsedate_to_datetime(entry.updated)
+    except Exception:
+        dt = None
 
-    # 2) feedparser'ın struct_time alanlarını fallback olarak dene
     if not dt:
-        try:
-            if getattr(entry, "published_parsed", None):
-                dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
-            elif getattr(entry, "updated_parsed", None):
-                dt = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
-        except Exception:
-            dt = None
+        return datetime.now(timezone.utc) - timedelta(days=365*100)
 
-    # 3) Hâlâ yoksa çok eski bir tarih ver (ama tz-aware)
-    if not dt:
-        return (datetime.now(timezone.utc) - timedelta(days=365*100))
+    # CNN → tz-aware → direk UTC'ye çevir
+    if dt.tzinfo:
+        return dt.astimezone(timezone.utc)
 
-    # 4) TZ normalization
-    if dt.tzinfo is None:
-        # TZ yoksa İstanbul say, sonra UTC'ye çevir
-        dt = LOCAL_TZ.localize(dt).astimezone(timezone.utc)
-    else:
-        # TZ varsa direkt UTC'ye çevir
-        dt = dt.astimezone(timezone.utc)
-
+    # Milliyet/Hürriyet gibi tzinfo yoksa → Istanbul say, UTC’ye çevir
+    dt = LOCAL_TZ.localize(dt).astimezone(timezone.utc)
     return dt
+
 
 def fetch_rss():
     """Tüm kaynaklardan haberleri getir ve tarihe göre (UTC) sırala"""
