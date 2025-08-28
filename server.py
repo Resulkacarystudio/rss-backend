@@ -80,7 +80,7 @@ def fetch_rss():
                     "title": entry.title,
                     "link": entry.link,
                     "pubDate": entry.get("published", ""),
-                    "published_at": pub_dt.isoformat() if pub_dt else "",
+                    "published_at": pub_dt,  # datetime olarak tutuyoruz
                     "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text(),
                     "image": img_url
                 })
@@ -96,6 +96,12 @@ def fetch_rss():
 def get_rss():
     try:
         all_items = fetch_rss()
+
+        # JSON’a çevirirken datetime → string
+        for item in all_items:
+            if isinstance(item["published_at"], datetime):
+                item["published_at"] = item["published_at"].isoformat()
+
         return jsonify({
             "total": len(all_items),
             "news": all_items
