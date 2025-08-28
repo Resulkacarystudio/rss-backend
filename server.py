@@ -11,30 +11,31 @@ CORS(app)
 RSS_SOURCES = {
     "milliyet": {
         "url": "https://www.milliyet.com.tr/rss/rssnew/anasayfa.xml",
-        "logo": "https://i.imgur.com/5f8Hn8x.png",  # ✅ Milliyet PNG logo
+        "logo": "/logos/milliyet.png",
         "color": "#ff1a1a"
     },
     "hurriyet": {
         "url": "https://www.hurriyet.com.tr/rss/anasayfa",
-        "logo": "https://i.imgur.com/CKkOR4r.png",  # ✅ Hürriyet PNG logo
+        "logo": "/logos/hurriyet.png",
         "color": "#e60000"
     },
     "cnnturk": {
         "url": "https://www.cnnturk.com/feed/rss/all/news",
-        "logo": "https://i.imgur.com/FQktIUG.png",  # ✅ CNN Türk PNG logo
+        "logo": "/logos/cnnturk.png",
         "color": "#cc0000"
     },
     "sabah": {
         "url": "https://www.sabah.com.tr/rss/anasayfa.xml",
-        "logo": "https://i.imgur.com/dHyH9Xc.png",  # ✅ Sabah PNG logo
+        "logo": "/logos/sabah.png",
         "color": "#d71a28"
     },
     "ntv": {
         "url": "https://www.ntv.com.tr/gundem.rss",
-        "logo": "https://i.imgur.com/vhWfRwc.png",  # ✅ NTV PNG logo
+        "logo": "/logos/ntv.png",
         "color": "#006699"
     }
 }
+
 
 
 def fetch_rss():
