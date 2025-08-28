@@ -1,17 +1,40 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 import requests
 import feedparser
 from bs4 import BeautifulSoup
-import time
 
 app = Flask(__name__)
 CORS(app)
 
-# --- CACHE MEKANİZMASI ---
-cache_data = None
-cache_time = 0
-CACHE_DURATION = 300  # 5 dakika (saniye cinsinden)
+# --- RSS kaynakları + logo + renk ---
+RSS_SOURCES = {
+    "cnn": {
+        "url": "https://www.cnnturk.com/feed/rss/all/news",
+        "logo": "https://seeklogo.com/images/C/cnn-turk-logo-3E40B3A2ED-seeklogo.com.png",
+        "color": "#cc0000"  # koyu kırmızı
+    },
+    "hurriyet": {
+        "url": "https://www.hurriyet.com.tr/rss/anasayfa",
+        "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Hurriyet_logo.svg/2560px-Hurriyet_logo.svg.png",
+        "color": "#e60000"
+    },
+    "milliyet": {
+        "url": "https://www.milliyet.com.tr/rss/rssnew/anasayfa.xml",
+        "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Milliyet_logo.svg/2560px-Milliyet_logo.svg.png",
+        "color": "#ff1a1a"
+    },
+    "bbc": {
+        "url": "http://feeds.bbci.co.uk/news/rss.xml",
+        "logo": "https://upload.wikimedia.org/wikipedia/commons/b/bc/BBC_News_2022_%28Alt%29.svg",
+        "color": "#bb1919"
+    },
+    "reuters": {
+        "url": "http://feeds.reuters.com/reuters/topNews",
+        "logo": "https://upload.wikimedia.org/wikipedia/commons/5/59/Reuters_Logo.svg",
+        "color": "#ff9900"
+    }
+}
 
 def get_og_image(url):
     """Haber sayfasından <meta property='og:image'> çek"""
@@ -26,61 +49,76 @@ def get_og_image(url):
         print("Resim alınamadı:", e)
     return None
 
+
 def fetch_rss():
-    """RSS çek ve parse et"""
-    rss_url = "https://www.cnnturk.com/feed/rss/all/news"
-    resp = requests.get(rss_url, timeout=10)
-    resp.raise_for_status()
-
-    feed = feedparser.parse(resp.text)
-
+    """Tüm kaynaklardan haberleri çek"""
     items = []
-    for entry in feed.entries:
-        img_url = None
+    for source, info in RSS_SOURCES.items():
+        try:
+            resp = requests.get(info["url"], timeout=10)
+            resp.raise_for_status()
+            feed = feedparser.parse(resp.text)
 
-        # önce RSS içinden dene
-        if "enclosures" in entry and entry.enclosures:
-            img_url = entry.enclosures[0].get("href")
+            for entry in feed.entries:
+                img_url = None
 
-        # yoksa description içindeki img
-        if not img_url and "description" in entry:
-            soup = BeautifulSoup(entry.description, "html.parser")
-            img_tag = soup.find("img")
-            if img_tag and img_tag.get("src"):
-                img_url = img_tag["src"]
+                # önce RSS içinden dene
+                if "enclosures" in entry and entry.enclosures:
+                    img_url = entry.enclosures[0].get("href")
 
-        # hala yoksa haber sayfasını aç
-        if not img_url:
-            img_url = get_og_image(entry.link)
+                # yoksa description içindeki img
+                if not img_url and "description" in entry:
+                    soup = BeautifulSoup(entry.description, "html.parser")
+                    img_tag = soup.find("img")
+                    if img_tag and img_tag.get("src"):
+                        img_url = img_tag["src"]
 
-        items.append({
-            "title": entry.title,
-            "link": entry.link,
-            "pubDate": entry.get("published", ""),
-            "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text(),
-            "image": img_url
-        })
+                # hala yoksa haber sayfasını aç
+                if not img_url:
+                    img_url = get_og_image(entry.link)
 
+                items.append({
+                    "source": source,
+                    "source_logo": info["logo"],
+                    "source_color": info["color"],
+                    "title": entry.title,
+                    "link": entry.link,
+                    "pubDate": entry.get("published", ""),
+                    "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text(),
+                    "image": img_url
+                })
+        except Exception as e:
+            print(f"{info['url']} okunamadı:", e)
+
+    # Yayın tarihine göre sırala (yeni → eski)
+    items.sort(key=lambda x: x["pubDate"], reverse=True)
     return items
+
 
 @app.route("/rss")
 def get_rss():
-    global cache_data, cache_time
-
     try:
-        now = time.time()
-        # Cache süresi dolmuşsa yeniden çek
-        if not cache_data or (now - cache_time) > CACHE_DURATION:
-            print("⏳ Yeni RSS verisi çekiliyor...")
-            cache_data = fetch_rss()
-            cache_time = now
-        else:
-            print("⚡ Cache’den verildi.")
+        # Sayfa parametresi al (default 1)
+        page = int(request.args.get("page", 1))
+        per_page = 10
 
-        return jsonify(cache_data)
+        # Tüm haberleri çek
+        all_items = fetch_rss()
+
+        # Pagination slice
+        start = (page - 1) * per_page
+        end = start + per_page
+        paginated = all_items[start:end]
+
+        return jsonify({
+            "page": page,
+            "per_page": per_page,
+            "total": len(all_items),
+            "news": paginated
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 if __name__ == "__main__":
-    # Render/Heroku gibi platformlarda host=0.0.0.0 kullanılmalı
     app.run(host="0.0.0.0", port=5000, debug=True)
