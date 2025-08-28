@@ -42,6 +42,7 @@ RSS_SOURCES = {
     }
 }
 
+
 def parse_date(entry):
     """RSS tarih bilgisini datetime objesine çevir"""
     dt = None
@@ -54,15 +55,15 @@ def parse_date(entry):
         dt = None
 
     if not dt:
+        # fallback: çok eski bir tarih ata → sıralamada en sona düşsün
         return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
 
-    # Eğer timezone bilgisi varsa → UTC'ye çevir
+    # Eğer timezone bilgisi varsa → UTC’ye çevir
     if dt.tzinfo:
         return dt.astimezone(timezone.utc)
 
-    # Eğer timezone bilgisi YOKSA → İstanbul saati kabul et
-    dt = LOCAL_TZ.localize(dt)
-    return dt.astimezone(timezone.utc)
+    # Eğer timezone bilgisi YOKSA → İstanbul saati olarak kabul et
+    return LOCAL_TZ.localize(dt)
 
 
 def fetch_rss():
@@ -95,7 +96,7 @@ def fetch_rss():
                     "title": entry.get("title", "Başlık Yok"),
                     "link": entry.get("link", ""),
                     "pubDate": entry.get("published", ""),
-                    # ✅ JSON’a UTC ISO formatında veriyoruz
+                    # ✅ ISO formatlı string (UTC veya Istanbul local)
                     "published_at": pub_dt.isoformat(),
                     "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text() if "description" in entry else "",
                     "image": img_url
@@ -107,6 +108,7 @@ def fetch_rss():
     items.sort(key=lambda x: x["published_at"], reverse=True)
     return items
 
+
 @app.route("/rss")
 def get_rss():
     try:
@@ -117,6 +119,7 @@ def get_rss():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
