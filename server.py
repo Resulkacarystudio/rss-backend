@@ -5,9 +5,13 @@ import feedparser
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
+import pytz
 
 app = Flask(__name__)
 CORS(app)
+
+# Türkiye saati
+LOCAL_TZ = pytz.timezone("Europe/Istanbul")
 
 # --- Türk haber kaynakları --- #
 RSS_SOURCES = {
@@ -40,20 +44,30 @@ RSS_SOURCES = {
 
 
 def parse_date(entry):
-    """RSS tarih bilgisini güvenli şekilde datetime objesine çevir"""
+    """RSS tarih bilgisini güvenli şekilde datetime objesine çevir (UTC→Istanbul normalize)"""
+    dt = None
     try:
         if hasattr(entry, "published_parsed") and entry.published_parsed:
-            return datetime(*entry.published_parsed[:6])
-        if hasattr(entry, "updated_parsed") and entry.updated_parsed:
-            return datetime(*entry.updated_parsed[:6])
-        if hasattr(entry, "published") and entry.published:
-            return parsedate_to_datetime(entry.published)
-        if hasattr(entry, "updated") and entry.updated:
-            return parsedate_to_datetime(entry.updated)
+            dt = datetime(*entry.published_parsed[:6])
+        elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
+            dt = datetime(*entry.updated_parsed[:6])
+        elif hasattr(entry, "published") and entry.published:
+            dt = parsedate_to_datetime(entry.published)
+        elif hasattr(entry, "updated") and entry.updated:
+            dt = parsedate_to_datetime(entry.updated)
     except Exception:
-        pass
-    # fallback → çok eski tarih ver (sıralamada en sona düşsün)
-    return datetime.now() - timedelta(days=365*100)
+        dt = None
+
+    if not dt:
+        # fallback → çok eski tarih ver (sıralamada en sona düşsün)
+        return datetime.now() - timedelta(days=365*100)
+
+    # timezone bilgisi yoksa UTC varsay
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=pytz.UTC)
+
+    # Europe/Istanbul'a çevir
+    return dt.astimezone(LOCAL_TZ)
 
 
 def fetch_rss():
@@ -66,6 +80,7 @@ def fetch_rss():
             feed = feedparser.parse(resp.text)
 
             for entry in feed.entries:
+                # Görsel çıkar
                 img_url = None
                 if "enclosures" in entry and entry.enclosures:
                     img_url = entry.enclosures[0].get("href")
@@ -102,7 +117,7 @@ def get_rss():
     try:
         all_items = fetch_rss()
 
-        # JSON’a çevirirken datetime → string (kesinlikle!)
+        # JSON’a çevirirken datetime → string
         for item in all_items:
             if isinstance(item["published_at"], datetime):
                 item["published_at"] = item["published_at"].isoformat()
