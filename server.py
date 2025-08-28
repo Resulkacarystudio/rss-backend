@@ -3,7 +3,6 @@ from flask_cors import CORS
 import requests
 import feedparser
 from bs4 import BeautifulSoup
-from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -13,7 +12,7 @@ RSS_SOURCES = {
     "cnn": {
         "url": "https://www.cnnturk.com/feed/rss/all/news",
         "logo": "https://seeklogo.com/images/C/cnn-turk-logo-3E40B3A2ED-seeklogo.com.png",
-        "color": "#cc0000"  # koyu kırmızı
+        "color": "#cc0000"
     },
     "hurriyet": {
         "url": "https://www.hurriyet.com.tr/rss/anasayfa",
@@ -26,12 +25,12 @@ RSS_SOURCES = {
         "color": "#ff1a1a"
     },
     "bbc": {
-        "url": "https://feeds.bbci.co.uk/news/rss.xml",
+        "url": "http://feeds.bbci.co.uk/news/rss.xml",
         "logo": "https://upload.wikimedia.org/wikipedia/commons/b/bc/BBC_News_2022_%28Alt%29.svg",
         "color": "#bb1919"
     },
     "reuters": {
-        "url": "https://feeds.reuters.com/reuters/topNews",
+        "url": "http://feeds.reuters.com/reuters/topNews",
         "logo": "https://upload.wikimedia.org/wikipedia/commons/5/59/Reuters_Logo.svg",
         "color": "#ff9900"
     }
@@ -46,28 +45,22 @@ def get_og_image(url):
         og_image = soup.find("meta", property="og:image")
         if og_image and og_image.get("content"):
             return og_image["content"]
-    except Exception as e:
-        print("Resim alınamadı:", e)
+    except Exception:
+        pass
     return None
 
-
-def fetch_rss(limit=None):
-    """Tüm kaynaklardan haberleri çek (limit varsa o kadar haber döner)"""
+def fetch_rss(max_items=10):
+    """Kaynaklardan en fazla max_items haber çek"""
     items = []
     for source, info in RSS_SOURCES.items():
         try:
-            resp = requests.get(info["url"], timeout=10)
+            resp = requests.get(info["url"], timeout=8)
             resp.raise_for_status()
             feed = feedparser.parse(resp.text)
 
-            count = 0
-            for entry in feed.entries:
-                if limit and count >= limit:
-                    break
-                count += 1
-
+            # Her kaynaktan sadece 3 haber alalım (fazla yük bindirmesin)
+            for entry in feed.entries[:3]:
                 img_url = None
-
                 if "enclosures" in entry and entry.enclosures:
                     img_url = entry.enclosures[0].get("href")
 
@@ -93,10 +86,9 @@ def fetch_rss(limit=None):
         except Exception as e:
             print(f"{info['url']} okunamadı:", e)
 
-    # Yayın tarihine göre sırala (yeni → eski)
+    # Yayın tarihine göre sırala
     items.sort(key=lambda x: x["pubDate"], reverse=True)
-    return items
-
+    return items[:max_items]  # sadece ilk N haber dön
 
 @app.route("/rss")
 def get_rss():
@@ -104,11 +96,7 @@ def get_rss():
         page = int(request.args.get("page", 1))
         per_page = 10
 
-        # sadece gerekli sayfa kadar haber çekelim
-        need_count = page * per_page
-        all_items = fetch_rss(limit=need_count)
-
-        # slice işlemi
+        all_items = fetch_rss(max_items=page * per_page)  # sadece gerekli kadar çek
         start = (page - 1) * per_page
         end = start + per_page
         paginated = all_items[start:end]
@@ -121,7 +109,6 @@ def get_rss():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
