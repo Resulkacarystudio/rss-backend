@@ -15,32 +15,17 @@ RSS_SOURCES = {
         "logo": "https://seeklogo.com/images/C/cnn-turk-logo-3E40B3A2ED-seeklogo.com.png",
         "color": "#cc0000"  # koyu kırmızı
     },
-    "hurriyet": {
-        "url": "https://www.hurriyet.com.tr/rss/anasayfa",
-        "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Hurriyet_logo.svg/2560px-Hurriyet_logo.svg.png",
-        "color": "#e60000"
-    },
-    "milliyet": {
-        "url": "https://www.milliyet.com.tr/rss/rssnew/anasayfa.xml",
-        "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Milliyet_logo.svg/2560px-Milliyet_logo.svg.png",
-        "color": "#ff1a1a"
-    },
     "bbc": {
         "url": "https://feeds.bbci.co.uk/news/rss.xml",
         "logo": "https://upload.wikimedia.org/wikipedia/commons/b/bc/BBC_News_2022_%28Alt%29.svg",
         "color": "#bb1919"
-    },
-    "reuters": {
-        "url": "https://feeds.reuters.com/reuters/topNews",
-        "logo": "https://upload.wikimedia.org/wikipedia/commons/5/59/Reuters_Logo.svg",
-        "color": "#ff9900"
     }
 }
 
 def get_og_image(url):
     """Haber sayfasından <meta property='og:image'> çek"""
     try:
-        resp = requests.get(url, timeout=5)
+        resp = requests.get(url, timeout=3)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         og_image = soup.find("meta", property="og:image")
@@ -50,13 +35,18 @@ def get_og_image(url):
         print("Resim alınamadı:", e)
     return None
 
+def parse_date(entry):
+    """RSS entry içinden tarih parse et"""
+    if hasattr(entry, "published_parsed") and entry.published_parsed:
+        return datetime(*entry.published_parsed[:6])
+    return datetime.min
 
 def fetch_rss(limit=None):
     """Tüm kaynaklardan haberleri çek (limit varsa o kadar haber döner)"""
     items = []
     for source, info in RSS_SOURCES.items():
         try:
-            resp = requests.get(info["url"], timeout=10)
+            resp = requests.get(info["url"], timeout=3)
             resp.raise_for_status()
             feed = feedparser.parse(resp.text)
 
@@ -87,6 +77,7 @@ def fetch_rss(limit=None):
                     "title": entry.title,
                     "link": entry.link,
                     "pubDate": entry.get("published", ""),
+                    "published_at": parse_date(entry).isoformat(),
                     "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text(),
                     "image": img_url
                 })
@@ -94,9 +85,8 @@ def fetch_rss(limit=None):
             print(f"{info['url']} okunamadı:", e)
 
     # Yayın tarihine göre sırala (yeni → eski)
-    items.sort(key=lambda x: x["pubDate"], reverse=True)
+    items.sort(key=lambda x: x["published_at"], reverse=True)
     return items
-
 
 @app.route("/rss")
 def get_rss():
@@ -121,7 +111,6 @@ def get_rss():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
