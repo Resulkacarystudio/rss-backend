@@ -45,7 +45,11 @@ RSS_SOURCES = {
 }
 
 def parse_date(entry):
-    """RSS tarih bilgisini datetime (TR saati) olarak döndür"""
+    from email.utils import parsedate_to_datetime
+    from datetime import datetime, timedelta
+    import pytz
+
+    LOCAL_TZ = pytz.timezone("Europe/Istanbul")
     dt = None
     try:
         if "published" in entry and entry.published:
@@ -58,14 +62,12 @@ def parse_date(entry):
     if not dt:
         return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
 
-    # CNN Türk gibi tzinfo varsa TR saatine çevir
+    # Eğer dt zaten timezone içeriyorsa → sadece İstanbul’a çevir
     if dt.tzinfo:
-        dt = dt.astimezone(LOCAL_TZ)
-    else:
-        # tzinfo yoksa TR kabul et
-        dt = LOCAL_TZ.localize(dt)
+        return dt.astimezone(LOCAL_TZ)
 
-    return dt
+    # Eğer tzinfo yoksa → direkt İstanbul tz ekle
+    return LOCAL_TZ.localize(dt)
 
 def fetch_rss():
     """Tüm kaynaklardan haberleri getir ve tarihe göre sırala"""
