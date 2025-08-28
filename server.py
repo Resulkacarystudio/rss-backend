@@ -11,30 +11,31 @@ CORS(app)
 RSS_SOURCES = {
     "milliyet": {
         "url": "https://www.milliyet.com.tr/rss/rssnew/anasayfa.xml",
-        "logo": "https://upload.wikimedia.org/wikipedia/commons/0/0e/Milliyet_logo.svg",
+        "logo": "https://i.imgur.com/5f8Hn8x.png",  # ✅ Milliyet PNG logo
         "color": "#ff1a1a"
     },
     "hurriyet": {
         "url": "https://www.hurriyet.com.tr/rss/anasayfa",
-        "logo": "https://upload.wikimedia.org/wikipedia/commons/6/62/Hurriyet_logo.svg",
+        "logo": "https://i.imgur.com/CKkOR4r.png",  # ✅ Hürriyet PNG logo
         "color": "#e60000"
     },
     "cnnturk": {
         "url": "https://www.cnnturk.com/feed/rss/all/news",
-        "logo": "https://seeklogo.com/images/C/cnn-turk-logo-3E40B3A2ED-seeklogo.com.png",
+        "logo": "https://i.imgur.com/FQktIUG.png",  # ✅ CNN Türk PNG logo
         "color": "#cc0000"
     },
     "sabah": {
         "url": "https://www.sabah.com.tr/rss/anasayfa.xml",
-        "logo": "https://upload.wikimedia.org/wikipedia/commons/9/9e/Sabah_logo.svg",
+        "logo": "https://i.imgur.com/dHyH9Xc.png",  # ✅ Sabah PNG logo
         "color": "#d71a28"
     },
     "ntv": {
         "url": "https://www.ntv.com.tr/gundem.rss",
-        "logo": "https://upload.wikimedia.org/wikipedia/commons/9/9f/NTV_logo.png",
+        "logo": "https://i.imgur.com/vhWfRwc.png",  # ✅ NTV PNG logo
         "color": "#006699"
     }
 }
+
 
 def fetch_rss():
     """Tüm kaynaklardan haberleri getir"""
