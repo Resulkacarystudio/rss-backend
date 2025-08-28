@@ -3,6 +3,7 @@ from flask_cors import CORS
 import requests
 import feedparser
 from bs4 import BeautifulSoup
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -25,12 +26,12 @@ RSS_SOURCES = {
         "color": "#ff1a1a"
     },
     "bbc": {
-        "url": "http://feeds.bbci.co.uk/news/rss.xml",
+        "url": "https://feeds.bbci.co.uk/news/rss.xml",
         "logo": "https://upload.wikimedia.org/wikipedia/commons/b/bc/BBC_News_2022_%28Alt%29.svg",
         "color": "#bb1919"
     },
     "reuters": {
-        "url": "http://feeds.reuters.com/reuters/topNews",
+        "url": "https://feeds.reuters.com/reuters/topNews",
         "logo": "https://upload.wikimedia.org/wikipedia/commons/5/59/Reuters_Logo.svg",
         "color": "#ff9900"
     }
@@ -50,8 +51,8 @@ def get_og_image(url):
     return None
 
 
-def fetch_rss():
-    """Tüm kaynaklardan haberleri çek"""
+def fetch_rss(limit=None):
+    """Tüm kaynaklardan haberleri çek (limit varsa o kadar haber döner)"""
     items = []
     for source, info in RSS_SOURCES.items():
         try:
@@ -59,21 +60,23 @@ def fetch_rss():
             resp.raise_for_status()
             feed = feedparser.parse(resp.text)
 
+            count = 0
             for entry in feed.entries:
+                if limit and count >= limit:
+                    break
+                count += 1
+
                 img_url = None
 
-                # önce RSS içinden dene
                 if "enclosures" in entry and entry.enclosures:
                     img_url = entry.enclosures[0].get("href")
 
-                # yoksa description içindeki img
                 if not img_url and "description" in entry:
                     soup = BeautifulSoup(entry.description, "html.parser")
                     img_tag = soup.find("img")
                     if img_tag and img_tag.get("src"):
                         img_url = img_tag["src"]
 
-                # hala yoksa haber sayfasını aç
                 if not img_url:
                     img_url = get_og_image(entry.link)
 
@@ -98,14 +101,14 @@ def fetch_rss():
 @app.route("/rss")
 def get_rss():
     try:
-        # Sayfa parametresi al (default 1)
         page = int(request.args.get("page", 1))
         per_page = 10
 
-        # Tüm haberleri çek
-        all_items = fetch_rss()
+        # sadece gerekli sayfa kadar haber çekelim
+        need_count = page * per_page
+        all_items = fetch_rss(limit=need_count)
 
-        # Pagination slice
+        # slice işlemi
         start = (page - 1) * per_page
         end = start + per_page
         paginated = all_items[start:end]
