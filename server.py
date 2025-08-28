@@ -55,15 +55,14 @@ def parse_date(entry):
         dt = None
 
     if not dt:
-        # fallback: çok eski bir tarih ata → sıralamada en sona düşsün
         return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
 
-    # Eğer timezone bilgisi varsa → UTC’ye çevir
     if dt.tzinfo:
+        # CNN gibi zaten TZ içeriyorsa → UTC’ye çevir
         return dt.astimezone(timezone.utc)
-
-    # Eğer timezone bilgisi YOKSA → İstanbul saati olarak kabul et
-    return LOCAL_TZ.localize(dt)
+    else:
+        # TZ yoksa → direk Istanbul TZ ekle (UTC’ye çevirmeden)
+        return LOCAL_TZ.localize(dt)
 
 
 def fetch_rss():
@@ -76,7 +75,6 @@ def fetch_rss():
             feed = feedparser.parse(resp.text)
 
             for entry in feed.entries:
-                # Görsel çıkar
                 img_url = None
                 if "enclosures" in entry and entry.enclosures:
                     img_url = entry.enclosures[0].get("href")
@@ -96,7 +94,6 @@ def fetch_rss():
                     "title": entry.get("title", "Başlık Yok"),
                     "link": entry.get("link", ""),
                     "pubDate": entry.get("published", ""),
-                    # ✅ ISO formatlı string (UTC veya Istanbul local)
                     "published_at": pub_dt.isoformat(),
                     "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text() if "description" in entry else "",
                     "image": img_url
@@ -104,7 +101,6 @@ def fetch_rss():
         except Exception as e:
             print(f"{info['url']} okunamadı:", e)
 
-    # 🔥 Tüm haberleri tarihe göre sırala (yeni → eski)
     items.sort(key=lambda x: x["published_at"], reverse=True)
     return items
 
