@@ -3,12 +3,10 @@ from flask_cors import CORS
 import requests
 import feedparser
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import pytz
 
-from email.utils import parsedate_to_datetime
-import pytz
 app = Flask(__name__)
 CORS(app)
 
@@ -45,23 +43,25 @@ RSS_SOURCES = {
 }
 
 def parse_date(entry):
+    """RSS tarih bilgisini datetime objesine çevir (UTC normalize)"""
+    dt = None
     try:
-        if "published" in entry and entry.published:
+        if hasattr(entry, "published") and entry.published:
             dt = parsedate_to_datetime(entry.published)
-        elif "updated" in entry and entry.updated:
+        elif hasattr(entry, "updated") and entry.updated:
             dt = parsedate_to_datetime(entry.updated)
-        else:
-            return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
-
-        # Eğer tzinfo yoksa (timezone’suz tarih) → İstanbul ekle
-        if dt.tzinfo is None:
-            return LOCAL_TZ.localize(dt)
-
-        # Eğer tzinfo zaten varsa → hiç dokunma, direkt dön
-        return dt
-
     except Exception:
-        return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
+        dt = None
+
+    if not dt:
+        return datetime.now(timezone.utc) - timedelta(days=365*100)
+
+    # Eğer timezone yoksa → İstanbul kabul et
+    if dt.tzinfo is None:
+        dt = LOCAL_TZ.localize(dt)
+
+    # ✅ UTC'ye çevir
+    return dt.astimezone(timezone.utc)
 
 def fetch_rss():
     """Tüm kaynaklardan haberleri getir ve tarihe göre sırala"""
@@ -93,7 +93,8 @@ def fetch_rss():
                     "title": entry.get("title", "Başlık Yok"),
                     "link": entry.get("link", ""),
                     "pubDate": entry.get("published", ""),
-                    "published_at": pub_dt,  # datetime objesi
+                    # ✅ JSON’a UTC ISO formatında veriyoruz
+                    "published_at": pub_dt.isoformat(),
                     "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text() if "description" in entry else "",
                     "image": img_url
                 })
@@ -104,24 +105,16 @@ def fetch_rss():
     items.sort(key=lambda x: x["published_at"], reverse=True)
     return items
 
-
 @app.route("/rss")
 def get_rss():
     try:
         all_items = fetch_rss()
-
-        # JSON’a çevirirken datetime → string
-        for item in all_items:
-            if isinstance(item["published_at"], datetime):
-                item["published_at"] = item["published_at"].isoformat()
-
         return jsonify({
             "total": len(all_items),
             "news": all_items
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
