@@ -45,29 +45,23 @@ RSS_SOURCES = {
 }
 
 def parse_date(entry):
-    from email.utils import parsedate_to_datetime
-    from datetime import datetime, timedelta
-    import pytz
-
-    LOCAL_TZ = pytz.timezone("Europe/Istanbul")
-    dt = None
     try:
         if "published" in entry and entry.published:
             dt = parsedate_to_datetime(entry.published)
         elif "updated" in entry and entry.updated:
             dt = parsedate_to_datetime(entry.updated)
+        else:
+            return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
+
+        # Eğer tzinfo yoksa (timezone’suz tarih) → İstanbul ekle
+        if dt.tzinfo is None:
+            return LOCAL_TZ.localize(dt)
+
+        # Eğer tzinfo zaten varsa → hiç dokunma, direkt dön
+        return dt
+
     except Exception:
-        dt = None
-
-    if not dt:
         return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
-
-    # Eğer dt zaten timezone içeriyorsa → sadece İstanbul’a çevir
-    if dt.tzinfo:
-        return dt.astimezone(LOCAL_TZ)
-
-    # Eğer tzinfo yoksa → direkt İstanbul tz ekle
-    return LOCAL_TZ.localize(dt)
 
 def fetch_rss():
     """Tüm kaynaklardan haberleri getir ve tarihe göre sırala"""
