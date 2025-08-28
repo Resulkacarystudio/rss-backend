@@ -42,39 +42,69 @@ RSS_SOURCES = {
     }
 }
 
+def _safe_parse_dt(text: str):
+    """
+    Metin tarihini datetime'e çevirmeye çalışır (tz-aware).
+    Başarısız olursa None döner.
+    """
+    if not text:
+        return None
+    try:
+        dt = parsedate_to_datetime(text)
+        return dt
+    except Exception:
+        return None
 
 def parse_date(entry):
-    """RSS tarih bilgisini datetime objesine çevir"""
+    """
+    RSS tarih bilgisini tz-aware UTC datetime'e çevirir.
+    - TZ varsa: UTC'ye çevirir.
+    - TZ yoksa: İstanbul kabul eder ve UTC'ye çevirir.
+    - Yoksa: 100 yıl önce gibi çok eski bir tarih döndürür (sıralamayı bozmasın).
+    """
     dt = None
-    try:
-        if hasattr(entry, "published") and entry.published:
-            dt = parsedate_to_datetime(entry.published)
-        elif hasattr(entry, "updated") and entry.updated:
-            dt = parsedate_to_datetime(entry.updated)
-    except Exception:
-        dt = None
+    # 1) Metinsel alanlardan dene
+    for key in ("published", "updated"):
+        if hasattr(entry, key):
+            dt = _safe_parse_dt(getattr(entry, key, None))
+            if dt:
+                break
 
+    # 2) feedparser'ın struct_time alanlarını fallback olarak dene
     if not dt:
-        return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
+        try:
+            if getattr(entry, "published_parsed", None):
+                dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+            elif getattr(entry, "updated_parsed", None):
+                dt = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
+        except Exception:
+            dt = None
 
-    if dt.tzinfo:
-        # CNN gibi zaten TZ içeriyorsa → UTC’ye çevir
-        return dt.astimezone(timezone.utc)
+    # 3) Hâlâ yoksa çok eski bir tarih ver (ama tz-aware)
+    if not dt:
+        return (datetime.now(timezone.utc) - timedelta(days=365*100))
+
+    # 4) TZ normalization
+    if dt.tzinfo is None:
+        # TZ yoksa İstanbul say, sonra UTC'ye çevir
+        dt = LOCAL_TZ.localize(dt).astimezone(timezone.utc)
     else:
-        # TZ yoksa → direk Istanbul TZ ekle (UTC’ye çevirmeden)
-        return LOCAL_TZ.localize(dt)
+        # TZ varsa direkt UTC'ye çevir
+        dt = dt.astimezone(timezone.utc)
 
+    return dt
 
 def fetch_rss():
-    """Tüm kaynaklardan haberleri getir ve tarihe göre sırala"""
+    """Tüm kaynaklardan haberleri getir ve tarihe göre (UTC) sırala"""
     items = []
     for source, info in RSS_SOURCES.items():
         try:
-            resp = requests.get(info["url"], timeout=5)
+            resp = requests.get(info["url"], timeout=10)
             resp.raise_for_status()
             feed = feedparser.parse(resp.text)
 
             for entry in feed.entries:
+                # Görsel çıkar
                 img_url = None
                 if "enclosures" in entry and entry.enclosures:
                     img_url = entry.enclosures[0].get("href")
@@ -85,7 +115,7 @@ def fetch_rss():
                     if img_tag and img_tag.get("src"):
                         img_url = img_tag["src"]
 
-                pub_dt = parse_date(entry)
+                pub_dt_utc = parse_date(entry)  # tz-aware UTC datetime
 
                 items.append({
                     "source": source,
@@ -93,17 +123,20 @@ def fetch_rss():
                     "source_color": info["color"],
                     "title": entry.get("title", "Başlık Yok"),
                     "link": entry.get("link", ""),
-                    "pubDate": entry.get("published", ""),
-                    "published_at": pub_dt.isoformat(),
+                    "pubDate": entry.get("published", "") or entry.get("updated", ""),
+                    # ISO'yu her zaman Z (UTC) ile bitirecek şekilde yaz
+                    "published_at": pub_dt_utc.isoformat().replace("+00:00", "Z"),
                     "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text() if "description" in entry else "",
-                    "image": img_url
+                    "image": img_url,
+                    # Sıralama için epoch (ms) ekleyelim (frontend ihtiyaç duyarsa hazır)
+                    "published_at_ms": int(pub_dt_utc.timestamp() * 1000)
                 })
         except Exception as e:
             print(f"{info['url']} okunamadı:", e)
 
-    items.sort(key=lambda x: x["published_at"], reverse=True)
+    # 🔥 UTC datetime değerine göre sırala (en yeni → en eski)
+    items.sort(key=lambda x: x["published_at_ms"], reverse=True)
     return items
-
 
 @app.route("/rss")
 def get_rss():
@@ -116,6 +149,6 @@ def get_rss():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 if __name__ == "__main__":
+    # Render gibi ortamlarda süreklilik için 0.0.0.0
     app.run(host="0.0.0.0", port=5000, debug=True)
