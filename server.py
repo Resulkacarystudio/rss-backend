@@ -42,9 +42,13 @@ RSS_SOURCES = {
 def parse_date(entry):
     """RSS tarih bilgisini datetime objesine çevir"""
     try:
+        if hasattr(entry, "published_parsed") and entry.published_parsed:
+            return datetime(*entry.published_parsed[:6])
+        if hasattr(entry, "updated_parsed") and entry.updated_parsed:
+            return datetime(*entry.updated_parsed[:6])
         if hasattr(entry, "published") and entry.published:
             return parsedate_to_datetime(entry.published)
-        elif hasattr(entry, "updated") and entry.updated:
+        if hasattr(entry, "updated") and entry.updated:
             return parsedate_to_datetime(entry.updated)
     except Exception:
         pass
@@ -52,7 +56,7 @@ def parse_date(entry):
 
 
 def fetch_rss():
-    """Tüm kaynaklardan haberleri getir ve tarihe göre sırala"""
+    """Tüm kaynaklardan haberleri getir ve tarihe göre karıştır"""
     items = []
     for source, info in RSS_SOURCES.items():
         try:
@@ -80,14 +84,14 @@ def fetch_rss():
                     "title": entry.title,
                     "link": entry.link,
                     "pubDate": entry.get("published", ""),
-                    "published_at": pub_dt,  # datetime olarak tutuyoruz
+                    "published_at": pub_dt,  # datetime objesi
                     "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text(),
                     "image": img_url
                 })
         except Exception as e:
             print(f"{info['url']} okunamadı:", e)
 
-    # 🔥 Tüm haberleri tarihe göre sırala (yeni → eski)
+    # 🔥 Tüm haberleri gerçek datetime’a göre sırala
     items.sort(key=lambda x: x["published_at"], reverse=True)
     return items
 
