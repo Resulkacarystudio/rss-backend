@@ -37,9 +37,20 @@ RSS_SOURCES = {
 }
 
 
+from datetime import datetime
+import email.utils
+
+def parse_date(entry):
+    """RSS tarih bilgisini datetime objesine çevir"""
+    if hasattr(entry, "published") and entry.published:
+        try:
+            return datetime(*email.utils.parsedate(entry.published)[:6])
+        except Exception:
+            return datetime.min
+    return datetime.min
 
 def fetch_rss():
-    """Tüm kaynaklardan haberleri getir"""
+    """Tüm kaynaklardan haberleri getir ve tarihe göre sırala"""
     items = []
     for source, info in RSS_SOURCES.items():
         try:
@@ -65,12 +76,15 @@ def fetch_rss():
                     "title": entry.title,
                     "link": entry.link,
                     "pubDate": entry.get("published", ""),
+                    "published_at": parse_date(entry).isoformat(),
                     "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text(),
                     "image": img_url
                 })
         except Exception as e:
             print(f"{info['url']} okunamadı:", e)
 
+    # 🔥 Tüm haberleri tarihe göre sırala (yeni → eski)
+    items.sort(key=lambda x: x["published_at"], reverse=True)
     return items
 
 @app.route("/rss")
