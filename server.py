@@ -42,9 +42,8 @@ RSS_SOURCES = {
     }
 }
 
-
 def parse_date(entry):
-    """RSS tarih bilgisini güvenli şekilde datetime objesine çevir (TR saati baz alınır)"""
+    """RSS tarih bilgisini güvenli şekilde datetime objesine çevir (TR saati normalize edilir)"""
     dt = None
     try:
         if hasattr(entry, "published_parsed") and entry.published_parsed:
@@ -59,16 +58,15 @@ def parse_date(entry):
         dt = None
 
     if not dt:
-        return datetime.now() - timedelta(days=365*100)
+        return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
 
-    # Eğer timezone bilgisi yoksa → doğrudan TR saati kabul et
+    # normalize et
     if dt.tzinfo is None:
         dt = LOCAL_TZ.localize(dt)
     else:
         dt = dt.astimezone(LOCAL_TZ)
 
     return dt
-
 
 def fetch_rss():
     """Tüm kaynaklardan haberleri getir ve tarihe göre sırala"""
