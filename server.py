@@ -3,7 +3,7 @@ from flask_cors import CORS
 import requests
 import feedparser
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 
 app = Flask(__name__)
@@ -40,7 +40,7 @@ RSS_SOURCES = {
 
 
 def parse_date(entry):
-    """RSS tarih bilgisini datetime objesine çevir"""
+    """RSS tarih bilgisini güvenli şekilde datetime objesine çevir"""
     try:
         if hasattr(entry, "published_parsed") and entry.published_parsed:
             return datetime(*entry.published_parsed[:6])
@@ -52,11 +52,12 @@ def parse_date(entry):
             return parsedate_to_datetime(entry.updated)
     except Exception:
         pass
-    return datetime.min
+    # fallback → çok eski tarih ver (sıralamada en sona düşsün)
+    return datetime.now() - timedelta(days=365*100)
 
 
 def fetch_rss():
-    """Tüm kaynaklardan haberleri getir ve tarihe göre karıştır"""
+    """Tüm kaynaklardan haberleri getir ve tarihe göre sırala"""
     items = []
     for source, info in RSS_SOURCES.items():
         try:
@@ -81,17 +82,17 @@ def fetch_rss():
                     "source": source,
                     "source_logo": info["logo"],
                     "source_color": info["color"],
-                    "title": entry.title,
-                    "link": entry.link,
+                    "title": entry.get("title", "Başlık Yok"),
+                    "link": entry.get("link", ""),
                     "pubDate": entry.get("published", ""),
                     "published_at": pub_dt,  # datetime objesi
-                    "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text(),
+                    "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text() if "description" in entry else "",
                     "image": img_url
                 })
         except Exception as e:
             print(f"{info['url']} okunamadı:", e)
 
-    # 🔥 Tüm haberleri gerçek datetime’a göre sırala
+    # 🔥 Tüm haberleri tarihe göre sırala (yeni → eski)
     items.sort(key=lambda x: x["published_at"], reverse=True)
     return items
 
@@ -101,7 +102,7 @@ def get_rss():
     try:
         all_items = fetch_rss()
 
-        # JSON’a çevirirken datetime → string
+        # JSON’a çevirirken datetime → string (kesinlikle!)
         for item in all_items:
             if isinstance(item["published_at"], datetime):
                 item["published_at"] = item["published_at"].isoformat()
