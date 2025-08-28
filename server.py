@@ -43,6 +43,11 @@ RSS_SOURCES = {
 }
 
 def parse_date(entry):
+    """
+    RSS tarih bilgisini tz-aware datetime'e çevirir.
+    - TZ bilgisi varsa → direkt IST'ye çevir
+    - TZ yoksa → Istanbul kabul et
+    """
     dt = None
     try:
         if hasattr(entry, "published") and entry.published:
@@ -53,18 +58,15 @@ def parse_date(entry):
         dt = None
 
     if not dt:
-        # tarih yoksa çok eski bir tarih ver
         return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
 
-    # Eğer gelen datetime timezone içeriyorsa önce UTC'ye normalize et
     if dt.tzinfo:
-        dt = dt.astimezone(pytz.UTC)
+        # zaten timezone bilgili (GMT, +0300 vs) → direkt Istanbul'a çevir
+        return dt.astimezone(LOCAL_TZ)
     else:
-        # tz yoksa UTC varsay
-        dt = pytz.UTC.localize(dt)
+        # timezone yoksa → İstanbul kabul et
+        return LOCAL_TZ.localize(dt)
 
-    # Son olarak Istanbul saatine çevir
-    return dt.astimezone(LOCAL_TZ)
 
 
 def fetch_rss():
