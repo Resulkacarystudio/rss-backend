@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 import pytz
 
+from email.utils import parsedate_to_datetime
+import pytz
 app = Flask(__name__)
 CORS(app)
 
@@ -43,16 +45,12 @@ RSS_SOURCES = {
 }
 
 def parse_date(entry):
-    """RSS tarih bilgisini güvenli şekilde datetime objesine çevir (TR saati normalize edilir)"""
+    """RSS tarih bilgisini datetime (TR saati) olarak döndür"""
     dt = None
     try:
-        if hasattr(entry, "published_parsed") and entry.published_parsed:
-            dt = datetime(*entry.published_parsed[:6])
-        elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
-            dt = datetime(*entry.updated_parsed[:6])
-        elif hasattr(entry, "published") and entry.published:
+        if "published" in entry and entry.published:
             dt = parsedate_to_datetime(entry.published)
-        elif hasattr(entry, "updated") and entry.updated:
+        elif "updated" in entry and entry.updated:
             dt = parsedate_to_datetime(entry.updated)
     except Exception:
         dt = None
@@ -60,11 +58,12 @@ def parse_date(entry):
     if not dt:
         return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
 
-    # normalize et
-    if dt.tzinfo is None:
-        dt = LOCAL_TZ.localize(dt)
-    else:
+    # CNN Türk gibi tzinfo varsa TR saatine çevir
+    if dt.tzinfo:
         dt = dt.astimezone(LOCAL_TZ)
+    else:
+        # tzinfo yoksa TR kabul et
+        dt = LOCAL_TZ.localize(dt)
 
     return dt
 
