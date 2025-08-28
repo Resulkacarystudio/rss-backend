@@ -3,6 +3,8 @@ from flask_cors import CORS
 import requests
 import feedparser
 from bs4 import BeautifulSoup
+from datetime import datetime
+from email.utils import parsedate_to_datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -37,17 +39,17 @@ RSS_SOURCES = {
 }
 
 
-from datetime import datetime
-import email.utils
-
 def parse_date(entry):
     """RSS tarih bilgisini datetime objesine çevir"""
-    if hasattr(entry, "published") and entry.published:
-        try:
-            return datetime(*email.utils.parsedate(entry.published)[:6])
-        except Exception:
-            return datetime.min
+    try:
+        if hasattr(entry, "published") and entry.published:
+            return parsedate_to_datetime(entry.published)
+        elif hasattr(entry, "updated") and entry.updated:
+            return parsedate_to_datetime(entry.updated)
+    except Exception:
+        pass
     return datetime.min
+
 
 def fetch_rss():
     """Tüm kaynaklardan haberleri getir ve tarihe göre sırala"""
@@ -69,6 +71,8 @@ def fetch_rss():
                     if img_tag and img_tag.get("src"):
                         img_url = img_tag["src"]
 
+                pub_dt = parse_date(entry)
+
                 items.append({
                     "source": source,
                     "source_logo": info["logo"],
@@ -76,7 +80,7 @@ def fetch_rss():
                     "title": entry.title,
                     "link": entry.link,
                     "pubDate": entry.get("published", ""),
-                    "published_at": parse_date(entry).isoformat(),
+                    "published_at": pub_dt.isoformat() if pub_dt else "",
                     "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text(),
                     "image": img_url
                 })
@@ -86,6 +90,7 @@ def fetch_rss():
     # 🔥 Tüm haberleri tarihe göre sırala (yeni → eski)
     items.sort(key=lambda x: x["published_at"], reverse=True)
     return items
+
 
 @app.route("/rss")
 def get_rss():
@@ -97,6 +102,7 @@ def get_rss():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
