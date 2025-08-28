@@ -43,11 +43,6 @@ RSS_SOURCES = {
 }
 
 def parse_date(entry):
-    """
-    RSS tarih bilgisini tz-aware datetime'e çevirir.
-    - TZ bilgisi varsa → direkt IST'ye çevir
-    - TZ yoksa → Istanbul kabul et
-    """
     dt = None
     try:
         if hasattr(entry, "published") and entry.published:
@@ -60,12 +55,13 @@ def parse_date(entry):
     if not dt:
         return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
 
-    if dt.tzinfo:
-        # zaten timezone bilgili (GMT, +0300 vs) → direkt Istanbul'a çevir
-        return dt.astimezone(LOCAL_TZ)
-    else:
-        # timezone yoksa → İstanbul kabul et
+    if dt.tzinfo is None:
+        # TZ bilgisi yok → İstanbul olarak kabul et
         return LOCAL_TZ.localize(dt)
+    else:
+        # TZ bilgisi var → direkt İstanbul'a çevir
+        return dt.astimezone(LOCAL_TZ)
+
 
 
 
