@@ -8,12 +8,22 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app)
 
-# --- Şimdilik sadece BBC bırakıyoruz ---
+# --- Türk haber kaynakları ---
 RSS_SOURCES = {
-    "bbc": {
-        "url": "https://feeds.bbci.co.uk/news/rss.xml",
-        "logo": "https://upload.wikimedia.org/wikipedia/commons/b/bc/BBC_News_2022_%28Alt%29.svg",
-        "color": "#bb1919"
+    "cnn": {
+        "url": "https://www.cnnturk.com/feed/rss/all/news",
+        "logo": "https://seeklogo.com/images/C/cnn-turk-logo-3E40B3A2ED-seeklogo.com.png",
+        "color": "#cc0000"
+    },
+    "hurriyet": {
+        "url": "https://www.hurriyet.com.tr/rss/anasayfa",
+        "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Hurriyet_logo.svg/2560px-Hurriyet_logo.svg.png",
+        "color": "#e60000"
+    },
+    "milliyet": {
+        "url": "https://www.milliyet.com.tr/rss/rssnew/anasayfa.xml",
+        "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Milliyet_logo.svg/2560px-Milliyet_logo.svg.png",
+        "color": "#ff1a1a"
     }
 }
 
@@ -38,7 +48,7 @@ def fetch_rss(limit=None):
     items = []
     for source, info in RSS_SOURCES.items():
         try:
-            resp = requests.get(info["url"], timeout=3)
+            resp = requests.get(info["url"], timeout=5)
             resp.raise_for_status()
             feed = feedparser.parse(resp.text)
 
