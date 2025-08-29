@@ -3,7 +3,7 @@ from flask_cors import CORS
 import requests
 import feedparser
 from bs4 import BeautifulSoup
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 import pytz
 import os
@@ -160,7 +160,21 @@ def fetch_rss(category="all"):
         for f in concurrent.futures.as_completed(futures):
             items.extend(f.result())
 
+    # Sıralama: en yeni → en eski
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
+
+    # 🔥 Tarih filtresi: breaking = 2 gün, diğerleri = 7 gün
+    now = datetime.now(LOCAL_TZ)
+    if category == "breaking":
+        cutoff = now - timedelta(days=2)
+    else:
+        cutoff = now - timedelta(days=7)
+
+    items = [
+        i for i in items
+        if datetime.fromtimestamp(i["published_at_ms"]/1000, LOCAL_TZ) >= cutoff
+    ]
+
     return items
 
 
