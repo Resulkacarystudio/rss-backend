@@ -41,6 +41,7 @@ RSS_SOURCES = {
 
 
 def parse_date(entry):
+    """RSS tarihini güvenli şekilde İstanbul saatine çevir"""
     dt = None
     try:
         if hasattr(entry, "published") and entry.published:
@@ -51,12 +52,15 @@ def parse_date(entry):
         dt = None
 
     if not dt:
+        # Tarih yoksa şu anki zaman
         return datetime.now(LOCAL_TZ)
 
+    # Eğer timezone yoksa UTC kabul et
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc).astimezone(LOCAL_TZ)
-    else:
-        return dt.astimezone(LOCAL_TZ)
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    # Son olarak İstanbul’a çevir
+    return dt.astimezone(LOCAL_TZ)
 
 
 def fetch_single(source, info):
