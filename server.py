@@ -3,9 +3,10 @@ from flask_cors import CORS
 import requests
 import feedparser
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import pytz
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -25,11 +26,6 @@ RSS_SOURCES = {
         "logo": "/logos/hurriyet.png",
         "color": "#e60000"
     },
-    # "cnnturk": {
-    #     "url": "https://www.cnnturk.com/feed/rss/all/news",
-    #     "logo": "/logos/cnnturk.png",
-    #     "color": "#cc0000"
-    # },
     "sabah": {
         "url": "https://www.sabah.com.tr/rss/anasayfa.xml",
         "logo": "/logos/sabah.png",
@@ -60,6 +56,7 @@ def parse_date(entry):
         return dt.replace(tzinfo=timezone.utc).astimezone(LOCAL_TZ)
     else:
         return dt.astimezone(LOCAL_TZ)
+
 
 def fetch_rss():
     """Tüm kaynaklardan haberleri getir ve tarihe göre sırala (IST)"""
@@ -109,6 +106,7 @@ def get_rss():
     try:
         all_items = fetch_rss()
         return jsonify({
+            "origin": os.environ.get("RAILWAY_STATIC_URL") or os.environ.get("RENDER", "local"),
             "total": len(all_items),
             "news": all_items
         })
@@ -117,5 +115,5 @@ def get_rss():
 
 
 if __name__ == "__main__":
-    # Render vb. ortamlarda 0.0.0.0 kullan
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
