@@ -54,14 +54,15 @@ def parse_date(entry):
         dt = None
 
     if not dt:
-        # Eğer tarih yoksa çok eski bir tarih ver → sıralamada sona düşsün
         return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
 
+    # Yıl düzeltme (ör: 1925 → 2025)
+    if dt.year < 1970:
+        dt = dt.replace(year=dt.year + 100)
+
     if dt.tzinfo is None:
-        # TZ bilgisi yoksa UTC varsay, İstanbul'a çevir
         return dt.replace(tzinfo=timezone.utc).astimezone(LOCAL_TZ)
     else:
-        # TZ bilgisi varsa direkt İstanbul'a çevir
         return dt.astimezone(LOCAL_TZ)
 
 
