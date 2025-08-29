@@ -113,7 +113,6 @@ def parse_date(entry):
 def extract_image_from_entry(entry):
     """
     Farklı RSS formatlarındaki görselleri agresif şekilde yakalar.
-    Sıra: enclosure -> media:content -> media:thumbnail -> description img -> content:encoded img -> imageUrl (TRT)
     """
     # 1) enclosure
     if "enclosures" in entry and entry.enclosures:
@@ -142,7 +141,6 @@ def extract_image_from_entry(entry):
             return img_tag["src"]
 
     # 5) content:encoded / content içindeki <img>
-    # feedparser 'content' alanını list olarak döndürebilir
     if hasattr(entry, "content") and entry.content:
         try:
             content_html = entry.content[0].get("value", "")
@@ -154,18 +152,26 @@ def extract_image_from_entry(entry):
         except Exception:
             pass
 
-    # 6) TRT Haber özel alan: <imageUrl> ... feedparser bunu 'imageurl' olarak map'liyor
-    # (Senin örneğinde bu alan var. Asıl çözüm bu!)
+    # 6) TRT Haber özel alan
     if hasattr(entry, "imageurl"):
         return entry.imageurl
 
-    # 7) linkler içinde image tipli enclosure olabilir
+    # 7) MYNET özel alanlar
+    if hasattr(entry, "img640x360"):
+        return entry.img640x360
+    if hasattr(entry, "ipimage"):
+        return entry.ipimage
+    if hasattr(entry, "img300x300"):
+        return entry.img300x300
+
+    # 8) linkler içinde image tipli enclosure olabilir
     if "links" in entry:
         for l in entry.links:
             if l.get("rel") == "enclosure" and "image" in (l.get("type") or "") and l.get("href"):
                 return l.get("href")
 
     return None
+
 
 def fetch_single(source, info):
     """Tek bir kaynaktan haberleri getir"""
