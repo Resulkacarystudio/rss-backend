@@ -42,14 +42,14 @@ RSS_SOURCES = {
 
 
 def parse_date(entry):
-    """RSS tarihini güvenli şekilde İstanbul saatine çevir (hibrit yaklaşım)"""
+    """RSS/Atom tarihini güvenli şekilde İstanbul saatine çevir (hibrit yaklaşım)"""
     dt = None
 
-    # 1️⃣ RSS pubDate / updated
+    # 1️⃣ RSS pubDate / Atom published/updated
     try:
-        if hasattr(entry, "published") and entry.published:
+        if "published" in entry and entry.published:
             dt = parsedate_to_datetime(entry.published)
-        elif hasattr(entry, "updated") and entry.updated:
+        elif "updated" in entry and entry.updated:
             dt = parsedate_to_datetime(entry.updated)
         elif "published_parsed" in entry and entry.published_parsed:
             dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
