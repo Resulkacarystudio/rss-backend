@@ -25,6 +25,11 @@ RSS_SOURCES = {
         "logo": "/logos/hurriyet.png",
         "color": "#e60000"
     },
+    "cnnturk": {
+        "url": "https://www.cnnturk.com/feed/rss/all/news",
+        "logo": "/logos/cnnturk.png",
+        "color": "#cc0000"
+    },
     "sabah": {
         "url": "https://www.sabah.com.tr/rss/anasayfa.xml",
         "logo": "/logos/sabah.png",
