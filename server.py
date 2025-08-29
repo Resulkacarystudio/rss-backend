@@ -43,7 +43,7 @@ RSS_CATEGORIES = {
         },
         "trthaber": {
             "url": "http://www.trthaber.com/sondakika.rss",
-            "logo": "/logos/trt.png",
+            "logo": "/logos/trthaber.png",
             "color": "#006699"
         },
         "mynet": {
