@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import pytz
 import os
+import concurrent.futures
 
 app = Flask(__name__)
 CORS(app)
@@ -58,43 +59,53 @@ def parse_date(entry):
         return dt.astimezone(LOCAL_TZ)
 
 
-def fetch_rss():
-    """Tüm kaynaklardan haberleri getir ve tarihe göre sırala (IST)"""
+def fetch_single(source, info):
+    """Tek bir kaynaktan haberleri getir"""
     items = []
-    for source, info in RSS_SOURCES.items():
-        try:
-            resp = requests.get(info["url"], timeout=10)
-            resp.raise_for_status()
-            feed = feedparser.parse(resp.text)
+    try:
+        resp = requests.get(info["url"], timeout=10)
+        resp.raise_for_status()
+        feed = feedparser.parse(resp.text)
 
-            for entry in feed.entries:
-                # Görsel
-                img_url = None
-                if "enclosures" in entry and entry.enclosures:
-                    img_url = entry.enclosures[0].get("href")
+        for entry in feed.entries:
+            # Görsel
+            img_url = None
+            if "enclosures" in entry and entry.enclosures:
+                img_url = entry.enclosures[0].get("href")
 
-                if not img_url and "description" in entry:
-                    soup = BeautifulSoup(entry.description, "html.parser")
-                    img_tag = soup.find("img")
-                    if img_tag and img_tag.get("src"):
-                        img_url = img_tag["src"]
+            if not img_url and "description" in entry:
+                soup = BeautifulSoup(entry.description, "html.parser")
+                img_tag = soup.find("img")
+                if img_tag and img_tag.get("src"):
+                    img_url = img_tag["src"]
 
-                pub_dt = parse_date(entry)
+            pub_dt = parse_date(entry)
 
-                items.append({
-                    "source": source,
-                    "source_logo": info["logo"],
-                    "source_color": info["color"],
-                    "title": entry.get("title", "Başlık Yok"),
-                    "link": entry.get("link", ""),
-                    "pubDate": entry.get("published", "") or entry.get("updated", ""),
-                    "published_at": pub_dt.isoformat(),  # ✅ İstanbul saati (+03:00)
-                    "published_at_ms": int(pub_dt.timestamp() * 1000),
-                    "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text() if "description" in entry else "",
-                    "image": img_url
-                })
-        except Exception as e:
-            print(f"{info['url']} okunamadı:", e)
+            items.append({
+                "source": source,
+                "source_logo": info["logo"],
+                "source_color": info["color"],
+                "title": entry.get("title", "Başlık Yok"),
+                "link": entry.get("link", ""),
+                "pubDate": entry.get("published", "") or entry.get("updated", ""),
+                "published_at": pub_dt.isoformat(),  # ✅ İstanbul saati (+03:00)
+                "published_at_ms": int(pub_dt.timestamp() * 1000),
+                "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text() if "description" in entry else "",
+                "image": img_url
+            })
+    except Exception as e:
+        print(f"{info['url']} okunamadı:", e)
+
+    return items
+
+
+def fetch_rss():
+    """Tüm kaynaklardan haberleri paralel çek"""
+    items = []
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(fetch_single, source, info) for source, info in RSS_SOURCES.items()]
+        for f in concurrent.futures.as_completed(futures):
+            items.extend(f.result())
 
     # 🔥 İstanbul saatine göre sıralama (yeni → eski)
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
