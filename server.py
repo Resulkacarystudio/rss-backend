@@ -33,11 +33,26 @@ RSS_CATEGORIES = {
         "hurriyet": {
             "url": "https://www.hurriyet.com.tr/rss/anasayfa",
             "logo": "/logos/hurriyet.png",
-            "color": "#4100e6"
+            "color": "#e60000"
         },
         "ntv": {
             "url": "https://www.ntv.com.tr/gundem.rss",
             "logo": "/logos/ntv.png",
+            "color": "#006699"
+        },
+        "mynet": {
+            "url": "https://www.mynet.com/haber/rss/anasayfa",
+            "logo": "/logos/mynet.png",
+            "color": "#ff6600"
+        },
+        "sabah": {
+            "url": "https://www.sabah.com.tr/rss/anasayfa.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#cc0000"
+        },
+        "trthaber": {
+            "url": "https://www.trthaber.com/xml_mobile.php?tur=anasayfa",
+            "logo": "/logos/trthaber.png",
             "color": "#006699"
         }
     },
@@ -47,10 +62,14 @@ RSS_CATEGORIES = {
             "logo": "/logos/milliyet.png",
             "color": "#1a76ff"
         },
-        # TRT: HTTPS kullan
-        "trthaber": {
-            "url": "https://www.trthaber.com/sondakika.rss",
-            "logo": "/logos/trthaber.png",
+        "hurriyet": {
+            "url": "https://www.hurriyet.com.tr/rss/sondakika",
+            "logo": "/logos/hurriyet.png",
+            "color": "#e60000"
+        },
+        "ntv": {
+            "url": "https://www.ntv.com.tr/son-dakika.rss",
+            "logo": "/logos/ntv.png",
             "color": "#006699"
         },
         "mynet": {
@@ -58,13 +77,189 @@ RSS_CATEGORIES = {
             "logo": "/logos/mynet.png",
             "color": "#ff6600"
         },
+        "sabah": {
+            "url": "https://www.sabah.com.tr/rss/sondakika.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#cc0000"
+        },
+        "trthaber": {
+            "url": "https://www.trthaber.com/sondakika.rss",
+            "logo": "/logos/trthaber.png",
+            "color": "#006699"
+        }
+    },
+    "gundem": {
+        "milliyet": {
+            "url": "https://www.milliyet.com.tr/rss/rssnew/gundem.xml",
+            "logo": "/logos/milliyet.png",
+            "color": "#1a76ff"
+        },
+        "hurriyet": {
+            "url": "https://www.hurriyet.com.tr/rss/gundem",
+            "logo": "/logos/hurriyet.png",
+            "color": "#e60000"
+        },
         "ntv": {
             "url": "https://www.ntv.com.tr/gundem.rss",
             "logo": "/logos/ntv.png",
             "color": "#006699"
+        },
+        "sabah": {
+            "url": "https://www.sabah.com.tr/rss/gundem.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#cc0000"
+        },
+        "mynet": {
+            "url": "https://www.mynet.com/haber/rss/guncel",
+            "logo": "/logos/mynet.png",
+            "color": "#ff6600"
+        }
+    },
+    "siyaset": {
+        "milliyet": {
+            "url": "https://www.milliyet.com.tr/rss/rssnew/siyaset.xml",
+            "logo": "/logos/milliyet.png",
+            "color": "#1a76ff"
+        },
+        "hurriyet": {
+            "url": "https://www.hurriyet.com.tr/rss/siyaset",
+            "logo": "/logos/hurriyet.png",
+            "color": "#e60000"
+        },
+        "sabah": {
+            "url": "https://www.sabah.com.tr/rss/siyaset.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#cc0000"
+        }
+    },
+    "ekonomi": {
+        "milliyet": {
+            "url": "https://www.milliyet.com.tr/rss/rssnew/ekonomi.xml",
+            "logo": "/logos/milliyet.png",
+            "color": "#1a76ff"
+        },
+        "hurriyet": {
+            "url": "https://www.hurriyet.com.tr/rss/ekonomi",
+            "logo": "/logos/hurriyet.png",
+            "color": "#e60000"
+        },
+        "ntv": {
+            "url": "https://www.ntv.com.tr/ekonomi.rss",
+            "logo": "/logos/ntv.png",
+            "color": "#006699"
+        },
+        "sabah": {
+            "url": "https://www.sabah.com.tr/rss/ekonomi.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#cc0000"
+        },
+        "mynet": {
+            "url": "https://www.mynet.com/haber/rss/ekonomi",
+            "logo": "/logos/mynet.png",
+            "color": "#ff6600"
+        }
+    },
+    "spor": {
+        "milliyet": {
+            "url": "https://www.milliyet.com.tr/rss/rssnew/spor.xml",
+            "logo": "/logos/milliyet.png",
+            "color": "#1a76ff"
+        },
+        "ntv": {
+            "url": "https://www.ntv.com.tr/spor.rss",
+            "logo": "/logos/ntv.png",
+            "color": "#006699"
+        },
+        "sabah": {
+            "url": "https://www.sabah.com.tr/rss/spor.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#cc0000"
+        },
+        "hurriyet": {
+            "url": "https://www.hurriyet.com.tr/rss/spor",
+            "logo": "/logos/hurriyet.png",
+            "color": "#e60000"
+        },
+        "mynet": {
+            "url": "https://www.mynet.com/haber/rss/spor",
+            "logo": "/logos/mynet.png",
+            "color": "#ff6600"
+        }
+    },
+    "dunya": {
+        "milliyet": {
+            "url": "https://www.milliyet.com.tr/rss/rssnew/dunya.xml",
+            "logo": "/logos/milliyet.png",
+            "color": "#1a76ff"
+        },
+        "hurriyet": {
+            "url": "https://www.hurriyet.com.tr/rss/dunya",
+            "logo": "/logos/hurriyet.png",
+            "color": "#e60000"
+        },
+        "ntv": {
+            "url": "https://www.ntv.com.tr/dunya.rss",
+            "logo": "/logos/ntv.png",
+            "color": "#006699"
+        },
+        "sabah": {
+            "url": "https://www.sabah.com.tr/rss/dunya.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#cc0000"
+        }
+    },
+    "magazin": {
+        "mynet": {
+            "url": "https://www.mynet.com/haber/rss/magazin",
+            "logo": "/logos/mynet.png",
+            "color": "#ff6600"
+        },
+        "milliyet": {
+            "url": "https://www.milliyet.com.tr/rss/rssnew/magazin.xml",
+            "logo": "/logos/milliyet.png",
+            "color": "#1a76ff"
+        },
+        "sabah": {
+            "url": "https://www.sabah.com.tr/rss/magazin.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#cc0000"
+        }
+    },
+    "saglik": {
+        "mynet": {
+            "url": "https://www.mynet.com/haber/rss/saglik",
+            "logo": "/logos/mynet.png",
+            "color": "#ff6600"
+        },
+        "sabah": {
+            "url": "https://www.sabah.com.tr/rss/saglik.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#cc0000"
+        }
+    },
+    "teknoloji": {
+        "mynet": {
+            "url": "https://www.mynet.com/haber/rss/teknoloji",
+            "logo": "/logos/mynet.png",
+            "color": "#ff6600"
+        }
+    },
+    "egitim": {
+        "mynet": {
+            "url": "https://www.mynet.com/haber/rss/egitim",
+            "logo": "/logos/mynet.png",
+            "color": "#ff6600"
+        }
+    },
+    "kultursanat": {
+        "mynet": {
+            "url": "https://www.mynet.com/haber/rss/kultur-sanat",
+            "logo": "/logos/mynet.png",
+            "color": "#ff6600"
         }
     }
 }
+
 
 def parse_date(entry):
     """RSS/Atom tarihini güvenli şekilde İstanbul saatine çevir"""
