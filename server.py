@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 import requests
 import feedparser
@@ -16,29 +16,52 @@ CORS(app)
 # Türkiye saat dilimi
 LOCAL_TZ = pytz.timezone("Europe/Istanbul")
 
-# --- Türk haber kaynakları --- #
-RSS_SOURCES = {
-    "milliyet": {
-        "url": "https://www.milliyet.com.tr/rss/rssnew/anasayfa.xml",
-        "logo": "/logos/milliyet.png",
-        "color": "#1a76ff"
+# --- RSS Kaynakları kategorilere göre --- #
+RSS_CATEGORIES = {
+    "all": {
+        "milliyet": {
+            "url": "https://www.milliyet.com.tr/rss/rssnew/anasayfa.xml",
+            "logo": "/logos/milliyet.png",
+            "color": "#1a76ff"
+        },
+        "hurriyet": {
+            "url": "https://www.hurriyet.com.tr/rss/anasayfa",
+            "logo": "/logos/hurriyet.png",
+            "color": "#4100e6"
+        },
+        "sabah": {
+            "url": "https://www.sabah.com.tr/rss/anasayfa.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#d7881a"
+        },
+        "ntv": {
+            "url": "https://www.ntv.com.tr/gundem.rss",
+            "logo": "/logos/ntv.png",
+            "color": "#006699"
+        }
     },
-    "hurriyet": {
-        "url": "https://www.hurriyet.com.tr/rss/anasayfa",
-        "logo": "/logos/hurriyet.png",
-        "color": "#4100e6"
-    },
-    "sabah": {
-        "url": "https://www.sabah.com.tr/rss/anasayfa.xml",
-        "logo": "/logos/sabah.png",
-        "color": "#d7881a"
-    },
-    "ntv": {
-        "url": "https://www.ntv.com.tr/gundem.rss",
-        "logo": "/logos/ntv.png",
-        "color": "#006699"
+    "breaking": {
+        "sabah": {
+            "url": "https://www.sabah.com.tr/rss/sondakika.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#d7881a"
+        },
+        "milliyet": {
+            "url": "http://www.milliyet.com.tr/rss/rssNew/SonDakikaRss.xml",
+            "logo": "/logos/milliyet.png",
+            "color": "#1a76ff"
+        },
+        "trthaber": {
+            "url": "http://www.trthaber.com/sondakika.rss",
+            "logo": "/logos/trt.png",
+            "color": "#006699"
+        },
+        "mynet": {
+            "url": "http://www.mynet.com/haber/rss/sondakika",
+            "logo": "/logos/mynet.png",
+            "color": "#ff6600"
+        }
     }
-    
 }
 
 
@@ -47,13 +70,10 @@ def parse_date(entry):
     dt = None
 
     try:
-        # Atom/RSS timestamp (struct_time formatı)
         if entry.get("published_parsed"):
             dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
         elif entry.get("updated_parsed"):
             dt = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
-
-        # Eğer string olarak varsa
         elif entry.get("published"):
             dt = parsedate_to_datetime(entry.published)
         elif entry.get("updated"):
@@ -61,7 +81,6 @@ def parse_date(entry):
     except Exception:
         dt = None
 
-    # GUID içinde tarih
     if not dt:
         guid = entry.get("id") or entry.get("guid")
         if guid:
@@ -74,7 +93,6 @@ def parse_date(entry):
                 except Exception:
                     pass
 
-    # URL içinden tarih (saat/dakika → çekilme zamanı)
     if not dt:
         link = entry.get("link", "")
         match = re.search(r"(\d{4})[./-](\d{2})[./-](\d{2})", link)
@@ -87,7 +105,6 @@ def parse_date(entry):
             except Exception:
                 pass
 
-    # Hâlâ yoksa → çekilme zamanı
     if not dt:
         dt = datetime.now(timezone.utc)
 
@@ -103,7 +120,6 @@ def fetch_single(source, info):
         feed = feedparser.parse(resp.text)
 
         for entry in feed.entries:
-            # Görsel
             img_url = None
             if "enclosures" in entry and entry.enclosures:
                 img_url = entry.enclosures[0].get("href")
@@ -123,7 +139,7 @@ def fetch_single(source, info):
                 "title": entry.get("title", "Başlık Yok"),
                 "link": entry.get("link", ""),
                 "pubDate": entry.get("published", "") or entry.get("updated", ""),
-                "published_at": pub_dt.isoformat(),  # ✅ İstanbul saati (+03:00)
+                "published_at": pub_dt.isoformat(),
                 "published_at_ms": int(pub_dt.timestamp() * 1000),
                 "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text() if "description" in entry else "",
                 "image": img_url
@@ -134,15 +150,16 @@ def fetch_single(source, info):
     return items
 
 
-def fetch_rss():
-    """Tüm kaynaklardan haberleri paralel çek"""
+def fetch_rss(category="all"):
+    """Kategoriye göre RSS çek"""
     items = []
+    sources = RSS_CATEGORIES.get(category, RSS_CATEGORIES["all"])
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = [executor.submit(fetch_single, source, info) for source, info in RSS_SOURCES.items()]
+        futures = [executor.submit(fetch_single, source, info) for source, info in sources.items()]
         for f in concurrent.futures.as_completed(futures):
             items.extend(f.result())
 
-    # 🔥 İstanbul saatine göre sıralama (yeni → eski)
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
     return items
 
@@ -150,9 +167,11 @@ def fetch_rss():
 @app.route("/rss")
 def get_rss():
     try:
-        all_items = fetch_rss()
+        category = request.args.get("category", "all")
+        all_items = fetch_rss(category)
         return jsonify({
             "origin": os.environ.get("RAILWAY_STATIC_URL") or os.environ.get("RENDER", "local"),
+            "category": category,
             "total": len(all_items),
             "news": all_items
         })
