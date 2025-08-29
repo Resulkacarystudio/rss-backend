@@ -8,6 +8,7 @@ from email.utils import parsedate_to_datetime
 import pytz
 import os
 import concurrent.futures
+import re
 
 app = Flask(__name__)
 CORS(app)
@@ -41,25 +42,53 @@ RSS_SOURCES = {
 
 
 def parse_date(entry):
-    """RSS tarihini güvenli şekilde İstanbul saatine çevir"""
+    """RSS tarihini güvenli şekilde İstanbul saatine çevir (hibrit yaklaşım)"""
     dt = None
+
+    # 1️⃣ RSS pubDate / updated
     try:
         if hasattr(entry, "published") and entry.published:
             dt = parsedate_to_datetime(entry.published)
         elif hasattr(entry, "updated") and entry.updated:
             dt = parsedate_to_datetime(entry.updated)
+        elif "published_parsed" in entry and entry.published_parsed:
+            dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+        elif "updated_parsed" in entry and entry.updated_parsed:
+            dt = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
     except Exception:
         dt = None
 
+    # 2️⃣ GUID / ID içinde tarih
     if not dt:
-        # Tarih yoksa şu anki zaman
-        return datetime.now(LOCAL_TZ)
+        guid = entry.get("id") or entry.get("guid")
+        if guid:
+            match = re.search(r"(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})?", guid)
+            if match:
+                try:
+                    year, month, day, hour, minute = match.groups(default="00")
+                    dt = datetime(
+                        int(year), int(month), int(day), int(hour), int(minute),
+                        tzinfo=timezone.utc
+                    )
+                except Exception:
+                    pass
 
-    # Eğer timezone yoksa UTC kabul et
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+    # 3️⃣ URL içinden tarih
+    if not dt:
+        link = entry.get("link", "")
+        match = re.search(r"(\d{4})[./-](\d{2})[./-](\d{2})", link)
+        if match:
+            try:
+                year, month, day = match.groups()
+                dt = datetime(int(year), int(month), int(day), tzinfo=timezone.utc)
+            except Exception:
+                pass
 
-    # Son olarak İstanbul’a çevir
+    # 4️⃣ Hiçbiri yoksa → çekilme zamanı
+    if not dt:
+        dt = datetime.now(timezone.utc)
+
+    # Son olarak İstanbul saatine çevir
     return dt.astimezone(LOCAL_TZ)
 
 
