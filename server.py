@@ -116,9 +116,16 @@ def fetch_single(source, info):
 
         for entry in feed.entries:
             img_url = None
+
+            # 1) enclosure varsa önce onu dene
             if "enclosures" in entry and entry.enclosures:
                 img_url = entry.enclosures[0].get("href")
 
+            # 2) media:content varsa (TRT, NTV gibi kaynaklar için)
+            if not img_url and "media_content" in entry and entry.media_content:
+                img_url = entry.media_content[0].get("url")
+
+            # 3) description içindeki <img>
             if not img_url and "description" in entry:
                 soup = BeautifulSoup(entry.description, "html.parser")
                 img_tag = soup.find("img")
@@ -143,6 +150,7 @@ def fetch_single(source, info):
         print(f"{info['url']} okunamadı:", e)
 
     return items
+
 
 
 def fetch_rss(category="all"):
