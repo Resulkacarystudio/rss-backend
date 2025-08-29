@@ -42,23 +42,25 @@ RSS_SOURCES = {
 
 
 def parse_date(entry):
-    """RSS/Atom tarihini güvenli şekilde İstanbul saatine çevir (hibrit yaklaşım)"""
+    """RSS/Atom tarihini güvenli şekilde İstanbul saatine çevir"""
     dt = None
 
-    # 1️⃣ RSS pubDate / Atom published/updated
     try:
-        if "published" in entry and entry.published:
-            dt = parsedate_to_datetime(entry.published)
-        elif "updated" in entry and entry.updated:
-            dt = parsedate_to_datetime(entry.updated)
-        elif "published_parsed" in entry and entry.published_parsed:
+        # Atom/RSS timestamp (struct_time formatı)
+        if entry.get("published_parsed"):
             dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
-        elif "updated_parsed" in entry and entry.updated_parsed:
+        elif entry.get("updated_parsed"):
             dt = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
+
+        # Eğer string olarak varsa (bazı RSS feed'lerinde böyle oluyor)
+        elif entry.get("published"):
+            dt = parsedate_to_datetime(entry.published)
+        elif entry.get("updated"):
+            dt = parsedate_to_datetime(entry.updated)
     except Exception:
         dt = None
 
-    # 2️⃣ GUID / ID içinde tarih
+    # GUID içinde tarih
     if not dt:
         guid = entry.get("id") or entry.get("guid")
         if guid:
@@ -66,14 +68,12 @@ def parse_date(entry):
             if match:
                 try:
                     year, month, day, hour, minute = match.groups(default="00")
-                    dt = datetime(
-                        int(year), int(month), int(day), int(hour), int(minute),
-                        tzinfo=timezone.utc
-                    )
+                    dt = datetime(int(year), int(month), int(day),
+                                  int(hour), int(minute), tzinfo=timezone.utc)
                 except Exception:
                     pass
 
-    # 3️⃣ URL içinden tarih + çekilme zamanı (saat/dakika)
+    # URL içinden tarih (saat/dakika → çekilme zamanı)
     if not dt:
         link = entry.get("link", "")
         match = re.search(r"(\d{4})[./-](\d{2})[./-](\d{2})", link)
@@ -81,20 +81,17 @@ def parse_date(entry):
             try:
                 year, month, day = match.groups()
                 now = datetime.now(timezone.utc)
-                dt = datetime(
-                    int(year), int(month), int(day),
-                    now.hour, now.minute,  # çekilme zamanı saat/dakika
-                    tzinfo=timezone.utc
-                )
+                dt = datetime(int(year), int(month), int(day),
+                              now.hour, now.minute, tzinfo=timezone.utc)
             except Exception:
                 pass
 
-    # 4️⃣ Hiçbiri yoksa → çekilme zamanı
+    # Hâlâ yoksa → çekilme zamanı
     if not dt:
         dt = datetime.now(timezone.utc)
 
-    # Son olarak İstanbul saatine çevir
     return dt.astimezone(LOCAL_TZ)
+
 
 
 def fetch_single(source, info):
