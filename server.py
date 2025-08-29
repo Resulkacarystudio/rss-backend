@@ -121,13 +121,21 @@ def fetch_single(source, info):
             if "enclosures" in entry and entry.enclosures:
                 img_url = entry.enclosures[0].get("href")
 
-            # 2) media:content varsa (TRT, NTV gibi kaynaklar için)
+            # 2) media:content varsa
             if not img_url and "media_content" in entry and entry.media_content:
                 img_url = entry.media_content[0].get("url")
 
             # 3) description içindeki <img>
             if not img_url and "description" in entry:
                 soup = BeautifulSoup(entry.description, "html.parser")
+                img_tag = soup.find("img")
+                if img_tag and img_tag.get("src"):
+                    img_url = img_tag["src"]
+
+            # 4) content:encoded içindeki <img>
+            if not img_url and "content" in entry:
+                content_html = entry.get("content")[0].get("value", "")
+                soup = BeautifulSoup(content_html, "html.parser")
                 img_tag = soup.find("img")
                 if img_tag and img_tag.get("src"):
                     img_url = img_tag["src"]
@@ -150,6 +158,7 @@ def fetch_single(source, info):
         print(f"{info['url']} okunamadı:", e)
 
     return items
+
 
 
 
