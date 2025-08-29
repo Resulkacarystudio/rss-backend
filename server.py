@@ -21,28 +21,24 @@ RSS_SOURCES = {
     "milliyet": {
         "url": "https://www.milliyet.com.tr/rss/rssnew/anasayfa.xml",
         "logo": "/logos/milliyet.png",
-        "color": "#ff1a1a"
+        "color": "#1a76ff"
     },
     "hurriyet": {
         "url": "https://www.hurriyet.com.tr/rss/anasayfa",
         "logo": "/logos/hurriyet.png",
-        "color": "#e60000"
+        "color": "#4100e6"
     },
     "sabah": {
         "url": "https://www.sabah.com.tr/rss/anasayfa.xml",
         "logo": "/logos/sabah.png",
-        "color": "#d71a28"
+        "color": "#d7881a"
     },
     "ntv": {
         "url": "https://www.ntv.com.tr/gundem.rss",
         "logo": "/logos/ntv.png",
         "color": "#006699"
-    },
-    "cnnturk": {
-        "url": "https://www.cnnturk.com/feed/rss/all/news",
-        "logo": "/logos/cnnturk.png",
-        "color": "#cc0000"
     }
+    
 }
 
 
