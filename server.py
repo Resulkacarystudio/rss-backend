@@ -3,7 +3,7 @@ from flask_cors import CORS
 import requests
 import feedparser
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import pytz
 
@@ -42,6 +42,7 @@ RSS_SOURCES = {
     }
 }
 
+
 def parse_date(entry):
     dt = None
     try:
@@ -53,16 +54,15 @@ def parse_date(entry):
         dt = None
 
     if not dt:
+        # Eğer tarih yoksa çok eski bir tarih ver → sıralamada sona düşsün
         return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
 
     if dt.tzinfo is None:
-        # TZ bilgisi yok → İstanbul olarak kabul et
-        return LOCAL_TZ.localize(dt)
+        # TZ bilgisi yoksa UTC varsay, İstanbul'a çevir
+        return dt.replace(tzinfo=timezone.utc).astimezone(LOCAL_TZ)
     else:
-        # TZ bilgisi var → direkt İstanbul'a çevir
+        # TZ bilgisi varsa direkt İstanbul'a çevir
         return dt.astimezone(LOCAL_TZ)
-
-
 
 
 def fetch_rss():
@@ -95,7 +95,7 @@ def fetch_rss():
                     "title": entry.get("title", "Başlık Yok"),
                     "link": entry.get("link", ""),
                     "pubDate": entry.get("published", "") or entry.get("updated", ""),
-                    "published_at": pub_dt.isoformat(),  # ✅ IST (+03:00) formatında
+                    "published_at": pub_dt.isoformat(),  # ✅ İstanbul saati (+03:00)
                     "published_at_ms": int(pub_dt.timestamp() * 1000),
                     "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text() if "description" in entry else "",
                     "image": img_url
@@ -107,6 +107,7 @@ def fetch_rss():
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
     return items
 
+
 @app.route("/rss")
 def get_rss():
     try:
@@ -117,6 +118,7 @@ def get_rss():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     # Render vb. ortamlarda 0.0.0.0 kullan
