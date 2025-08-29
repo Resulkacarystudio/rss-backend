@@ -37,6 +37,11 @@ RSS_SOURCES = {
         "url": "https://www.ntv.com.tr/gundem.rss",
         "logo": "/logos/ntv.png",
         "color": "#006699"
+    },
+    "cnnturk": {
+        "url": "https://www.cnnturk.com/feed/rss/all/news",
+        "logo": "/logos/cnnturk.png",
+        "color": "#cc0000"
     }
 }
 
@@ -52,7 +57,7 @@ def parse_date(entry):
         elif entry.get("updated_parsed"):
             dt = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
 
-        # Eğer string olarak varsa (bazı RSS feed'lerinde böyle oluyor)
+        # Eğer string olarak varsa
         elif entry.get("published"):
             dt = parsedate_to_datetime(entry.published)
         elif entry.get("updated"):
@@ -91,7 +96,6 @@ def parse_date(entry):
         dt = datetime.now(timezone.utc)
 
     return dt.astimezone(LOCAL_TZ)
-
 
 
 def fetch_single(source, info):
