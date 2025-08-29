@@ -54,17 +54,12 @@ def parse_date(entry):
         dt = None
 
     if not dt:
-        return datetime.now(LOCAL_TZ) - timedelta(days=365*100)
-
-    # Yıl düzeltme (ör: 1925 → 2025)
-    if dt.year < 1970:
-        dt = dt.replace(year=dt.year + 100)
+        return datetime.now(LOCAL_TZ)
 
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc).astimezone(LOCAL_TZ)
     else:
         return dt.astimezone(LOCAL_TZ)
-
 
 def fetch_rss():
     """Tüm kaynaklardan haberleri getir ve tarihe göre sırala (IST)"""
