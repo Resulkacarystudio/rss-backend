@@ -73,14 +73,19 @@ def parse_date(entry):
                 except Exception:
                     pass
 
-    # 3️⃣ URL içinden tarih
+    # 3️⃣ URL içinden tarih + çekilme zamanı (saat/dakika)
     if not dt:
         link = entry.get("link", "")
         match = re.search(r"(\d{4})[./-](\d{2})[./-](\d{2})", link)
         if match:
             try:
                 year, month, day = match.groups()
-                dt = datetime(int(year), int(month), int(day), tzinfo=timezone.utc)
+                now = datetime.now(timezone.utc)
+                dt = datetime(
+                    int(year), int(month), int(day),
+                    now.hour, now.minute,  # çekilme zamanı saat/dakika
+                    tzinfo=timezone.utc
+                )
             except Exception:
                 pass
 
