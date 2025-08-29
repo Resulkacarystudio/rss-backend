@@ -29,11 +29,6 @@ RSS_CATEGORIES = {
             "logo": "/logos/hurriyet.png",
             "color": "#4100e6"
         },
-        "sabah": {
-            "url": "https://www.sabah.com.tr/rss/anasayfa.xml",
-            "logo": "/logos/sabah.png",
-            "color": "#d7881a"
-        },
         "ntv": {
             "url": "https://www.ntv.com.tr/gundem.rss",
             "logo": "/logos/ntv.png",
@@ -41,11 +36,6 @@ RSS_CATEGORIES = {
         }
     },
     "breaking": {
-        "sabah": {
-            "url": "https://www.sabah.com.tr/rss/sondakika.xml",
-            "logo": "/logos/sabah.png",
-            "color": "#d7881a"
-        },
         "milliyet": {
             "url": "http://www.milliyet.com.tr/rss/rssNew/SonDakikaRss.xml",
             "logo": "/logos/milliyet.png",
@@ -60,6 +50,11 @@ RSS_CATEGORIES = {
             "url": "http://www.mynet.com/haber/rss/sondakika",
             "logo": "/logos/mynet.png",
             "color": "#ff6600"
+        },
+        "ntv": {
+            "url": "https://www.ntv.com.tr/gundem.rss",
+            "logo": "/logos/ntv.png",
+            "color": "#006699"
         }
     }
 }
