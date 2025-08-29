@@ -16,6 +16,12 @@ CORS(app)
 # Türkiye saat dilimi
 LOCAL_TZ = pytz.timezone("Europe/Istanbul")
 
+# Basit ve güvenli bir User-Agent (bazı kaynaklar istiyor)
+HTTP_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; HaberMerkezi/1.0; +https://example.com)",
+    "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
+}
+
 # --- RSS Kaynakları kategorilere göre --- #
 RSS_CATEGORIES = {
     "all": {
@@ -37,17 +43,18 @@ RSS_CATEGORIES = {
     },
     "breaking": {
         "milliyet": {
-            "url": "http://www.milliyet.com.tr/rss/rssNew/SonDakikaRss.xml",
+            "url": "https://www.milliyet.com.tr/rss/rssNew/SonDakikaRss.xml",
             "logo": "/logos/milliyet.png",
             "color": "#1a76ff"
         },
+        # TRT: HTTPS kullan
         "trthaber": {
-            "url": "http://www.trthaber.com/sondakika.rss",
+            "url": "https://www.trthaber.com/sondakika.rss",
             "logo": "/logos/trthaber.png",
             "color": "#006699"
         },
         "mynet": {
-            "url": "http://www.mynet.com/haber/rss/sondakika",
+            "url": "https://www.mynet.com/haber/rss/sondakika",
             "logo": "/logos/mynet.png",
             "color": "#ff6600"
         },
@@ -59,11 +66,9 @@ RSS_CATEGORIES = {
     }
 }
 
-
 def parse_date(entry):
     """RSS/Atom tarihini güvenli şekilde İstanbul saatine çevir"""
     dt = None
-
     try:
         if entry.get("published_parsed"):
             dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
@@ -105,42 +110,80 @@ def parse_date(entry):
 
     return dt.astimezone(LOCAL_TZ)
 
+def extract_image_from_entry(entry):
+    """
+    Farklı RSS formatlarındaki görselleri agresif şekilde yakalar.
+    Sıra: enclosure -> media:content -> media:thumbnail -> description img -> content:encoded img -> imageUrl (TRT)
+    """
+    # 1) enclosure
+    if "enclosures" in entry and entry.enclosures:
+        href = entry.enclosures[0].get("href")
+        if href:
+            return href
+
+    # 2) media:content
+    if "media_content" in entry and entry.media_content:
+        url = entry.media_content[0].get("url")
+        if url:
+            return url
+
+    # 3) media:thumbnail
+    if "media_thumbnail" in entry and entry.media_thumbnail:
+        url = entry.media_thumbnail[0].get("url")
+        if url:
+            return url
+
+    # 4) description içindeki <img>
+    desc_html = entry.get("description") or entry.get("summary", "")
+    if desc_html:
+        soup = BeautifulSoup(desc_html, "html.parser")
+        img_tag = soup.find("img")
+        if img_tag and img_tag.get("src"):
+            return img_tag["src"]
+
+    # 5) content:encoded / content içindeki <img>
+    # feedparser 'content' alanını list olarak döndürebilir
+    if hasattr(entry, "content") and entry.content:
+        try:
+            content_html = entry.content[0].get("value", "")
+            if content_html:
+                soup = BeautifulSoup(content_html, "html.parser")
+                img_tag = soup.find("img")
+                if img_tag and img_tag.get("src"):
+                    return img_tag["src"]
+        except Exception:
+            pass
+
+    # 6) TRT Haber özel alan: <imageUrl> ... feedparser bunu 'imageurl' olarak map'liyor
+    # (Senin örneğinde bu alan var. Asıl çözüm bu!)
+    if hasattr(entry, "imageurl"):
+        return entry.imageurl
+
+    # 7) linkler içinde image tipli enclosure olabilir
+    if "links" in entry:
+        for l in entry.links:
+            if l.get("rel") == "enclosure" and "image" in (l.get("type") or "") and l.get("href"):
+                return l.get("href")
+
+    return None
 
 def fetch_single(source, info):
     """Tek bir kaynaktan haberleri getir"""
     items = []
     try:
-        resp = requests.get(info["url"], timeout=10)
+        resp = requests.get(info["url"], timeout=12, headers=HTTP_HEADERS)
         resp.raise_for_status()
-        feed = feedparser.parse(resp.text)
+        feed = feedparser.parse(resp.content)
 
         for entry in feed.entries:
-            img_url = None
-
-            # 1) enclosure varsa önce onu dene
-            if "enclosures" in entry and entry.enclosures:
-                img_url = entry.enclosures[0].get("href")
-
-            # 2) media:content varsa
-            if not img_url and "media_content" in entry and entry.media_content:
-                img_url = entry.media_content[0].get("url")
-
-            # 3) description içindeki <img>
-            if not img_url and "description" in entry:
-                soup = BeautifulSoup(entry.description, "html.parser")
-                img_tag = soup.find("img")
-                if img_tag and img_tag.get("src"):
-                    img_url = img_tag["src"]
-
-            # 4) content:encoded içindeki <img>
-            if not img_url and "content" in entry:
-                content_html = entry.get("content")[0].get("value", "")
-                soup = BeautifulSoup(content_html, "html.parser")
-                img_tag = soup.find("img")
-                if img_tag and img_tag.get("src"):
-                    img_url = img_tag["src"]
-
+            img_url = extract_image_from_entry(entry)
             pub_dt = parse_date(entry)
+
+            # Açıklama düz metin
+            raw_desc_html = entry.get("description") or entry.get("summary", "")
+            plain_desc = ""
+            if raw_desc_html:
+                plain_desc = BeautifulSoup(raw_desc_html, "html.parser").get_text()
 
             items.append({
                 "source": source,
@@ -151,7 +194,7 @@ def fetch_single(source, info):
                 "pubDate": entry.get("published", "") or entry.get("updated", ""),
                 "published_at": pub_dt.isoformat(),
                 "published_at_ms": int(pub_dt.timestamp() * 1000),
-                "description": BeautifulSoup(entry.get("description", ""), "html.parser").get_text() if "description" in entry else "",
+                "description": plain_desc.strip(),
                 "image": img_url
             })
     except Exception as e:
@@ -159,8 +202,17 @@ def fetch_single(source, info):
 
     return items
 
-
-
+def dedupe_items(items):
+    """Aynı link/title gelenleri ayıkla (bazı RSS'lerde tekrar gelebiliyor)"""
+    seen = set()
+    unique = []
+    for it in items:
+        key = (it.get("link") or "", it.get("title") or "")
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(it)
+    return unique
 
 def fetch_rss(category="all"):
     """Kategoriye göre RSS çek"""
@@ -172,23 +224,18 @@ def fetch_rss(category="all"):
         for f in concurrent.futures.as_completed(futures):
             items.extend(f.result())
 
+    # Tekrarları temizle
+    items = dedupe_items(items)
+
     # Sıralama: en yeni → en eski
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
 
     # 🔥 Tarih filtresi: breaking = 2 gün, diğerleri = 7 gün
     now = datetime.now(LOCAL_TZ)
-    if category == "breaking":
-        cutoff = now - timedelta(days=2)
-    else:
-        cutoff = now - timedelta(days=7)
-
-    items = [
-        i for i in items
-        if datetime.fromtimestamp(i["published_at_ms"]/1000, LOCAL_TZ) >= cutoff
-    ]
+    cutoff = now - (timedelta(days=2) if category == "breaking" else timedelta(days=7))
+    items = [i for i in items if datetime.fromtimestamp(i["published_at_ms"]/1000, LOCAL_TZ) >= cutoff]
 
     return items
-
 
 @app.route("/rss")
 def get_rss():
@@ -203,7 +250,6 @@ def get_rss():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
