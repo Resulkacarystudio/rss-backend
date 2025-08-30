@@ -226,7 +226,7 @@ RSS_CATEGORIES = {
         },
         "ntv": {
             "url": "https://www.ntv.com.tr/n-life.rss",
-            "logo": "/logos/sabah.png",
+            "logo": "/logos/ntv.png",
             "color": "#4e00cc"
         }
     },
@@ -259,7 +259,7 @@ RSS_CATEGORIES = {
             "color": "#892b40"
         },
          "sabah": {
-            "url": " https://www.sabah.com.tr/rss/teknoloji.xml",
+            "url": "https://www.sabah.com.tr/rss/teknoloji.xml",
             "logo": "/logos/sabah.png",
             "color": "#0a34a7"
         },
