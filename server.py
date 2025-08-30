@@ -282,11 +282,6 @@ RSS_CATEGORIES = {
         }
     },
     "kultursanat": {
-        "milliyet": {
-            "url": "https://www.milliyet.com.tr/rss/rssnew/yazarlarrss.xml",
-            "logo": "/logos/milliyet.png",
-            "color": "#ff002b"
-        },
          "sabah": {
             "url": "https://www.sabah.com.tr/rss/kultur-sanat.xml",
             "logo": "/logos/sabah.png",
