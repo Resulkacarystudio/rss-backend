@@ -337,8 +337,12 @@ def extract_image_from_entry(entry):
         if url:
             return url
 
-    # 4) description içindeki <img>
-    desc_html = entry.get("description") or entry.get("summary", "")
+    # 4) description / summary / summary_detail içindeki <img>
+    desc_html = (
+        entry.get("description")
+        or entry.get("summary")
+        or entry.get("summary_detail", {}).get("value", "")
+    )
     if desc_html:
         soup = BeautifulSoup(desc_html, "html.parser")
         img_tag = soup.find("img")
@@ -376,6 +380,7 @@ def extract_image_from_entry(entry):
                 return l.get("href")
 
     return None
+
 
 
 def fetch_single(source, info):
