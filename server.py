@@ -232,7 +232,7 @@ RSS_CATEGORIES = {
     },
     "saglik": {
         "mynet": {
-            "url": "https://www.mynet.com/haber/rss/saglik",
+            "url": "https://www.mynet.com/haber/rss/kategori/saglik/s",
             "logo": "/logos/mynet.png",
             "color": "#ff6600"
         },
@@ -240,6 +240,11 @@ RSS_CATEGORIES = {
             "url": "https://www.sabah.com.tr/rss/saglik.xml",
             "logo": "/logos/sabah.png",
             "color": "#cc0000"
+        },
+        "ntv": {
+            "url": "https://www.ntv.com.tr/saglik.rss",
+            "logo": "/logos/ntv.png",
+            "color": "#0044cc"
         }
     },
     "teknoloji": {
@@ -266,17 +271,37 @@ RSS_CATEGORIES = {
     },
     "egitim": {
         "mynet": {
-            "url": "https://www.mynet.com/haber/rss/egitim",
+            "url": "https://www.mynet.com/haber/rss/kategori/teknoloji/",
             "logo": "/logos/mynet.png",
             "color": "#ff6600"
+        },
+        "ntv": {
+            "url": "https://www.ntv.com.tr/egitim.rss",
+            "logo": "/logos/ntv.png",
+            "color": "#006eff"
+        },
+        "milliyet": {
+            "url": "https://www.milliyet.com.tr/rss/rssnew/egitim.xml",
+            "logo": "/logos/milliyet.png",
+            "color": "#ff0008"
         }
     },
     "kultursanat": {
-        "mynet": {
-            "url": "https://www.mynet.com/haber/rss/kultur-sanat",
-            "logo": "/logos/mynet.png",
-            "color": "#ff6600"
-        }
+        "milliyet": {
+            "url": "https://www.milliyet.com.tr/rss/rssnew/yazarlarrss.xml",
+            "logo": "/logos/milliyet.png",
+            "color": "#ff002b"
+        },
+         "sabah": {
+            "url": "https://www.sabah.com.tr/rss/kultur-sanat.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#ff6f00"
+        },
+         "ntv": {
+            "url": "https://www.ntv.com.tr/sanat.rss",
+            "logo": "/logos/ntv.png",
+            "color": "#0800ff"
+        },
     }
 }
 
