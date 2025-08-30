@@ -210,12 +210,12 @@ RSS_CATEGORIES = {
     },
     "magazin": {
         "mynet": {
-            "url": "https://www.mynet.com/haber/rss/magazin",
+            "url": "https://www.mynet.com/haber/rss/kategori/yasam/",
             "logo": "/logos/mynet.png",
             "color": "#ff6600"
         },
         "milliyet": {
-            "url": "https://www.milliyet.com.tr/rss/rssnew/magazin.xml",
+            "url": "https://www.milliyet.com.tr/rss/rssnew/magazinrss.xml",
             "logo": "/logos/milliyet.png",
             "color": "#1a76ff"
         },
@@ -223,6 +223,11 @@ RSS_CATEGORIES = {
             "url": "https://www.sabah.com.tr/rss/magazin.xml",
             "logo": "/logos/sabah.png",
             "color": "#cc0000"
+        },
+        "ntv": {
+            "url": "https://www.ntv.com.tr/n-life.rss",
+            "logo": "/logos/sabah.png",
+            "color": "#4e00cc"
         }
     },
     "saglik": {
@@ -252,6 +257,11 @@ RSS_CATEGORIES = {
             "url": " https://www.sabah.com.tr/rss/teknoloji.xml",
             "logo": "/logos/sabah.png",
             "color": "#0a34a7"
+        },
+           "ntv": {
+            "url": "https://www.ntv.com.tr/teknoloji.rss",
+            "logo": "/logos/ntv.png",
+            "color": "#4365c2"
         }
     },
     "egitim": {
