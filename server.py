@@ -77,11 +77,6 @@ RSS_CATEGORIES = {
             "logo": "/logos/mynet.png",
             "color": "#ff6600"
         },
-        "sabah": {
-            "url": "https://www.sabah.com.tr/rss/sondakika.xml",
-            "logo": "/logos/sabah.png",
-            "color": "#cc0000"
-        },
         "trthaber": {
             "url": "https://www.trthaber.com/sondakika.rss",
             "logo": "/logos/trthaber.png",
