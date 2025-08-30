@@ -48,7 +48,7 @@ RSS_CATEGORIES = {
         "sabah": {
             "url": "https://www.sabah.com.tr/rss/anasayfa.xml",
             "logo": "/logos/sabah.png",
-            "color": "#cc0000"
+            "color": "#a300cc"
         },
         "trthaber": {
             "url": "https://www.trthaber.com/xml_mobile.php?tur=anasayfa",
