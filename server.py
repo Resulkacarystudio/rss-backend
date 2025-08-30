@@ -60,7 +60,7 @@ RSS_CATEGORIES = {
         "milliyet": {
             "url": "https://www.milliyet.com.tr/rss/rssNew/SonDakikaRss.xml",
             "logo": "/logos/milliyet.png",
-            "color": "#1a76ff"
+            "color": "#ff1a1a"
         },
         "hurriyet": {
             "url": "https://www.hurriyet.com.tr/rss/sondakika",
@@ -80,7 +80,7 @@ RSS_CATEGORIES = {
         "trthaber": {
             "url": "https://www.trthaber.com/sondakika.rss",
             "logo": "/logos/trthaber.png",
-            "color": "#006699"
+            "color": "#7DB6D3"
         }
     },
     "gundem": {
