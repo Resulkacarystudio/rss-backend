@@ -239,9 +239,19 @@ RSS_CATEGORIES = {
     },
     "teknoloji": {
         "mynet": {
-            "url": "https://www.mynet.com/haber/rss/teknoloji",
+            "url": "https://www.mynet.com/haber/rss/kategori/teknoloji/",
             "logo": "/logos/mynet.png",
             "color": "#ff6600"
+        },
+         "milliyet": {
+            "url": "https://www.milliyet.com.tr/rss/rssnew/teknolojirss.xml",
+            "logo": "/logos/milliyet.png",
+            "color": "#892b40"
+        },
+         "sabah": {
+            "url": " https://www.sabah.com.tr/rss/teknoloji.xml",
+            "logo": "/logos/sabah.png",
+            "color": "#0a34a7"
         }
     },
     "egitim": {
