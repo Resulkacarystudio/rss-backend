@@ -499,7 +499,7 @@ def rewrite():
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-{
+               {
   "role": "system",
   "content": (
     "Sen deneyimli bir haber editörüsün. "
@@ -511,6 +511,7 @@ def rewrite():
     "Ayrıca haber için dikkat çekici ve anlamlı yeni bir başlık üret."
   )
 }
+,
                 {"role": "user", "content": content},
             ],
         )
