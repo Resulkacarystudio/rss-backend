@@ -24,7 +24,6 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 # Flask App & CORS
 # =================================================
 app = Flask(__name__)
-
 # CORS ayarları → hem localhost hem resulkacar.com için izin ver
 CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "https://resulkacar.com"]}})
 
@@ -312,12 +311,12 @@ RSS_CATEGORIES = {
         },
     }
 }
+
 # =================================================
 # Yardımcı Fonksiyonlar
 # =================================================
 def parse_date(entry):
     """RSS/Atom tarihini güvenli şekilde İstanbul saatine çevir"""
-    dt = None
     try:
         if entry.get("published_parsed"):
             dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
@@ -327,21 +326,31 @@ def parse_date(entry):
             dt = parsedate_to_datetime(entry.published)
         elif entry.get("updated"):
             dt = parsedate_to_datetime(entry.updated)
+        else:
+            dt = datetime.now(timezone.utc)
     except Exception:
-        dt = None
-
-    if not dt:
         dt = datetime.now(timezone.utc)
-
     return dt.astimezone(LOCAL_TZ)
 
 
 def extract_image_from_entry(entry):
-    """RSS içinden görseli almaya çalışır"""
-    if "enclosures" in entry and entry.enclosures:
-        href = entry.enclosures[0].get("href")
-        if href:
-            return href
+    """RSS içinden görseli almaya çalışır (farklı alanları da kontrol eder)"""
+    try:
+        if "enclosures" in entry and entry.enclosures:
+            href = entry.enclosures[0].get("href")
+            if href:
+                return href
+        if "media_content" in entry and entry.media_content:
+            return entry.media_content[0].get("url")
+        if "media_thumbnail" in entry and entry.media_thumbnail:
+            return entry.media_thumbnail[0].get("url")
+        if "summary" in entry:
+            soup = BeautifulSoup(entry.summary, "html.parser")
+            img = soup.find("img")
+            if img and img.get("src"):
+                return img["src"]
+    except Exception:
+        return None
     return None
 
 
@@ -357,19 +366,16 @@ def fetch_single(source, info):
             img_url = extract_image_from_entry(entry)
             pub_dt = parse_date(entry)
             raw_desc_html = entry.get("description") or entry.get("summary", "")
-            plain_desc = ""
-            if raw_desc_html:
-                plain_desc = BeautifulSoup(raw_desc_html, "html.parser").get_text()
+            plain_desc = BeautifulSoup(raw_desc_html, "html.parser").get_text() if raw_desc_html else ""
 
             items.append(
                 {
                     "source": source,
-                    "source_logo": info["logo"],
-                    "source_color": info["color"],
+                    "source_logo": info.get("logo"),
+                    "source_color": info.get("color"),
                     "title": entry.get("title", "Başlık Yok"),
                     "link": entry.get("link", ""),
-                    "pubDate": entry.get("published", "")
-                    or entry.get("updated", ""),
+                    "pubDate": entry.get("published", "") or entry.get("updated", ""),
                     "published_at": pub_dt.isoformat(),
                     "published_at_ms": int(pub_dt.timestamp() * 1000),
                     "description": plain_desc.strip(),
@@ -378,7 +384,6 @@ def fetch_single(source, info):
             )
     except Exception as e:
         print(f"{info['url']} okunamadı:", e)
-
     return items
 
 
@@ -400,13 +405,9 @@ def fetch_rss(category="all"):
     items = []
     sources = RSS_CATEGORIES.get(category, RSS_CATEGORIES["all"])
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = [
-            executor.submit(fetch_single, source, info)
-            for source, info in sources.items()
-        ]
+        futures = [executor.submit(fetch_single, source, info) for source, info in sources.items()]
         for f in concurrent.futures.as_completed(futures):
             items.extend(f.result())
-
     items = dedupe_items(items)
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
     return items
@@ -419,9 +420,7 @@ def extract_meta_from_url(url):
             url,
             timeout=10,
             headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/115 Safari/537.36",
+                "User-Agent": "Mozilla/5.0",
                 "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
             },
         )
@@ -429,9 +428,7 @@ def extract_meta_from_url(url):
         soup = BeautifulSoup(resp.text, "html.parser")
 
         title = soup.find("meta", property="og:title")
-        title = title.get("content") if title else (
-            soup.title.string if soup.title else "Başlık bulunamadı"
-        )
+        title = title.get("content") if title else (soup.title.string if soup.title else "Başlık bulunamadı")
 
         description = soup.find("meta", property="og:description")
         description = description.get("content") if description else ""
@@ -442,9 +439,7 @@ def extract_meta_from_url(url):
         published_at = soup.find("meta", property="article:published_time")
         published_at = published_at.get("content") if published_at else None
 
-        full_text = "\n".join(
-            [p.get_text() for p in soup.find_all("p") if p.get_text()]
-        )
+        full_text = "\n".join([p.get_text() for p in soup.find_all("p") if p.get_text()])
 
         return {
             "title": title.strip() if title else "",
@@ -484,7 +479,6 @@ def parse_url():
     url = request.args.get("url")
     if not url:
         return jsonify({"error": "url parametresi gerekli"}), 400
-
     try:
         data = extract_meta_from_url(url)
         if not data or "error" in data:
@@ -496,25 +490,31 @@ def parse_url():
 
 @app.route("/rewrite", methods=["POST"])
 def rewrite():
-    """Haberi OpenAI ile özgünleştir"""
+    """Haberi OpenAI ile özgünleştir + başlık üret"""
     data = request.get_json()
     content = data.get("text", "")
     if not content:
         return jsonify({"error": "text parametresi gerekli"}), 400
-
     try:
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": "Sen deneyimli bir haber editörüsün. Haberi özgünleştir ve akıcı yaz.",
-                },
+                {"role": "system", "content": "Sen deneyimli bir haber editörüsün. Haberi özgünleştir ve ona uygun yeni bir başlık üret."},
                 {"role": "user", "content": content},
             ],
         )
         rewritten = completion.choices[0].message.content
-        return jsonify({"rewritten": rewritten})
+
+        # Başlık + içerik ayırma
+        if "\n" in rewritten:
+            parts = rewritten.split("\n", 1)
+            title_ai = parts[0].strip()
+            body_ai = parts[1].strip()
+        else:
+            title_ai = rewritten[:60] + "..."
+            body_ai = rewritten
+
+        return jsonify({"title_ai": title_ai, "rewritten": body_ai})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
