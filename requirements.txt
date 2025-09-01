@@ -1,8 +1,8 @@
 flask
 flask-cors
 requests
-beautifulsoup4
 feedparser
-gunicorn
+beautifulsoup4
 pytz
-openai
+gunicorn
+openai>=1.0.0
