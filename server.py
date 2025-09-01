@@ -9,16 +9,9 @@ import pytz
 import os
 import concurrent.futures
 import re
-import openai
-
-# OpenAI API anahtarı Railway'de "OPENAI_API_KEY" olarak tanımlı olmalı
-openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 app = Flask(__name__)
-
-
-CORS(app, resources={r"/*": {"origins": "*"}})
-
+CORS(app)
 
 # Türkiye saat dilimi
 LOCAL_TZ = pytz.timezone("Europe/Istanbul")
@@ -28,12 +21,7 @@ HTTP_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; HaberMerkezi/1.0; +https://example.com)",
     "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
 }
-@app.after_request
-def add_cors_headers(response):
-    response.headers["Access-Control-Allow-Origin"] = "https://resulkacar.com"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    return response
+
 # --- RSS Kaynakları kategorilere göre --- #
 RSS_CATEGORIES = {
     "all": {
@@ -306,6 +294,8 @@ RSS_CATEGORIES = {
         },
     }
 }
+
+
 def parse_date(entry):
     """RSS/Atom tarihini güvenli şekilde İstanbul saatine çevir"""
     dt = None
@@ -322,17 +312,101 @@ def parse_date(entry):
         dt = None
 
     if not dt:
+        guid = entry.get("id") or entry.get("guid")
+        if guid:
+            match = re.search(r"(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})?", guid)
+            if match:
+                try:
+                    year, month, day, hour, minute = match.groups(default="00")
+                    dt = datetime(int(year), int(month), int(day),
+                                  int(hour), int(minute), tzinfo=timezone.utc)
+                except Exception:
+                    pass
+
+    if not dt:
+        link = entry.get("link", "")
+        match = re.search(r"(\d{4})[./-](\d{2})[./-](\d{2})", link)
+        if match:
+            try:
+                year, month, day = match.groups()
+                now = datetime.now(timezone.utc)
+                dt = datetime(int(year), int(month), int(day),
+                              now.hour, now.minute, tzinfo=timezone.utc)
+            except Exception:
+                pass
+
+    if not dt:
         dt = datetime.now(timezone.utc)
 
     return dt.astimezone(LOCAL_TZ)
 
 def extract_image_from_entry(entry):
-    """Farklı RSS formatlarındaki görselleri agresif şekilde yakalar."""
+    """
+    Farklı RSS formatlarındaki görselleri agresif şekilde yakalar.
+    """
+    # 1) enclosure
     if "enclosures" in entry and entry.enclosures:
         href = entry.enclosures[0].get("href")
         if href:
             return href
+
+    # 2) media:content
+    if "media_content" in entry and entry.media_content:
+        url = entry.media_content[0].get("url")
+        if url:
+            return url
+
+    # 3) media:thumbnail
+    if "media_thumbnail" in entry and entry.media_thumbnail:
+        url = entry.media_thumbnail[0].get("url")
+        if url:
+            return url
+
+    # 4) description / summary / summary_detail içindeki <img>
+    desc_html = (
+        entry.get("description")
+        or entry.get("summary")
+        or entry.get("summary_detail", {}).get("value", "")
+    )
+    if desc_html:
+        soup = BeautifulSoup(desc_html, "html.parser")
+        img_tag = soup.find("img")
+        if img_tag and img_tag.get("src"):
+            return img_tag["src"]
+
+    # 5) content:encoded / content içindeki <img>
+    if hasattr(entry, "content") and entry.content:
+        try:
+            content_html = entry.content[0].get("value", "")
+            if content_html:
+                soup = BeautifulSoup(content_html, "html.parser")
+                img_tag = soup.find("img")
+                if img_tag and img_tag.get("src"):
+                    return img_tag["src"]
+        except Exception:
+            pass
+
+    # 6) TRT Haber özel alan
+    if hasattr(entry, "imageurl"):
+        return entry.imageurl
+
+    # 7) MYNET özel alanlar
+    if hasattr(entry, "img640x360"):
+        return entry.img640x360
+    if hasattr(entry, "ipimage"):
+        return entry.ipimage
+    if hasattr(entry, "img300x300"):
+        return entry.img300x300
+
+    # 8) linkler içinde image tipli enclosure olabilir
+    if "links" in entry:
+        for l in entry.links:
+            if l.get("rel") == "enclosure" and "image" in (l.get("type") or "") and l.get("href"):
+                return l.get("href")
+
     return None
+
+
 
 def fetch_single(source, info):
     """Tek bir kaynaktan haberleri getir"""
@@ -345,6 +419,8 @@ def fetch_single(source, info):
         for entry in feed.entries:
             img_url = extract_image_from_entry(entry)
             pub_dt = parse_date(entry)
+
+            # Açıklama düz metin
             raw_desc_html = entry.get("description") or entry.get("summary", "")
             plain_desc = ""
             if raw_desc_html:
@@ -368,6 +444,7 @@ def fetch_single(source, info):
     return items
 
 def dedupe_items(items):
+    """Aynı link/title gelenleri ayıkla (bazı RSS'lerde tekrar gelebiliyor)"""
     seen = set()
     unique = []
     for it in items:
@@ -379,15 +456,26 @@ def dedupe_items(items):
     return unique
 
 def fetch_rss(category="all"):
+    """Kategoriye göre RSS çek"""
     items = []
     sources = RSS_CATEGORIES.get(category, RSS_CATEGORIES["all"])
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = [executor.submit(fetch_single, source, info) for source, info in sources.items()]
         for f in concurrent.futures.as_completed(futures):
             items.extend(f.result())
 
+    # Tekrarları temizle
     items = dedupe_items(items)
+
+    # Sıralama: en yeni → en eski
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
+
+    # 🔥 Tarih filtresi: breaking = 2 gün, diğerleri = 7 gün
+    now = datetime.now(LOCAL_TZ)
+    cutoff = now - (timedelta(days=2) if category == "breaking" else timedelta(days=7))
+    items = [i for i in items if datetime.fromtimestamp(i["published_at_ms"]/1000, LOCAL_TZ) >= cutoff]
+
     return items
 
 @app.route("/rss")
@@ -396,70 +484,11 @@ def get_rss():
         category = request.args.get("category", "all")
         all_items = fetch_rss(category)
         return jsonify({
-            "origin": os.environ.get("RAILWAY_STATIC_URL", "local"),
+            "origin": os.environ.get("RAILWAY_STATIC_URL") or os.environ.get("RENDER", "local"),
             "category": category,
             "total": len(all_items),
             "news": all_items
         })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-def extract_meta_from_url(url):
-    """Bir haber linkinden başlık, açıklama, görsel, tarih ve tam içerik çıkarır"""
-    try:
-        resp = requests.get(url, timeout=10, headers=HTTP_HEADERS)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        title = soup.find("meta", property="og:title")
-        title = title.get("content") if title else soup.title.string if soup.title else "Başlık bulunamadı"
-
-        description = soup.find("meta", property="og:description")
-        description = description.get("content") if description else ""
-
-        image = soup.find("meta", property="og:image")
-        image = image.get("content") if image else None
-
-        published_at = soup.find("meta", property="article:published_time")
-        published_at = published_at.get("content") if published_at else None
-
-        full_text = "\n".join([p.get_text() for p in soup.find_all("p") if p.get_text()])
-
-        return {
-            "title": title,
-            "description": description,
-            "image": image,
-            "publishedAt": published_at,
-            "fullText": full_text.strip()
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.route("/parse")
-def parse_url():
-    url = request.args.get("url")
-    if not url:
-        return jsonify({"error": "url parametresi gerekli"}), 400
-    data = extract_meta_from_url(url)
-    return jsonify(data)
-
-@app.route("/rewrite", methods=["POST"])
-def rewrite():
-    data = request.get_json()
-    content = data.get("text", "")
-    if not content:
-        return jsonify({"error": "text parametresi gerekli"}), 400
-
-    try:
-        completion = openai.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Sen deneyimli bir haber editörüsün. Haberi özgünleştir ve akıcı yaz."},
-                {"role": "user", "content": content}
-            ]
-        )
-        rewritten = completion.choices[0].message.content
-        return jsonify({"rewritten": rewritten})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
