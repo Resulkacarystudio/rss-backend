@@ -28,6 +28,7 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 app = Flask(__name__)
 # CORS ayarları → hem localhost hem resulkacar.com için izin ver
 CORS(app, resources={r"/*": {"origins": "*"}})
+print("🔑 OPENAI_API_KEY:", os.environ.get("OPENAI_API_KEY"))
 
 @app.after_request
 def apply_cors(response):
