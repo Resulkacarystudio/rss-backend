@@ -295,7 +295,6 @@ RSS_CATEGORIES = {
     }
 }
 
-
 def parse_date(entry):
     """RSS/Atom tarihini güvenli şekilde İstanbul saatine çevir"""
     dt = None
@@ -340,29 +339,24 @@ def parse_date(entry):
 
     return dt.astimezone(LOCAL_TZ)
 
+
 def extract_image_from_entry(entry):
-    """
-    Farklı RSS formatlarındaki görselleri agresif şekilde yakalar.
-    """
-    # 1) enclosure
+    """Farklı RSS formatlarındaki görselleri agresif şekilde yakalar."""
     if "enclosures" in entry and entry.enclosures:
         href = entry.enclosures[0].get("href")
         if href:
             return href
 
-    # 2) media:content
     if "media_content" in entry and entry.media_content:
         url = entry.media_content[0].get("url")
         if url:
             return url
 
-    # 3) media:thumbnail
     if "media_thumbnail" in entry and entry.media_thumbnail:
         url = entry.media_thumbnail[0].get("url")
         if url:
             return url
 
-    # 4) description / summary / summary_detail içindeki <img>
     desc_html = (
         entry.get("description")
         or entry.get("summary")
@@ -374,7 +368,6 @@ def extract_image_from_entry(entry):
         if img_tag and img_tag.get("src"):
             return img_tag["src"]
 
-    # 5) content:encoded / content içindeki <img>
     if hasattr(entry, "content") and entry.content:
         try:
             content_html = entry.content[0].get("value", "")
@@ -386,11 +379,8 @@ def extract_image_from_entry(entry):
         except Exception:
             pass
 
-    # 6) TRT Haber özel alan
     if hasattr(entry, "imageurl"):
         return entry.imageurl
-
-    # 7) MYNET özel alanlar
     if hasattr(entry, "img640x360"):
         return entry.img640x360
     if hasattr(entry, "ipimage"):
@@ -398,14 +388,12 @@ def extract_image_from_entry(entry):
     if hasattr(entry, "img300x300"):
         return entry.img300x300
 
-    # 8) linkler içinde image tipli enclosure olabilir
     if "links" in entry:
         for l in entry.links:
             if l.get("rel") == "enclosure" and "image" in (l.get("type") or "") and l.get("href"):
                 return l.get("href")
 
     return None
-
 
 
 def fetch_single(source, info):
@@ -419,8 +407,6 @@ def fetch_single(source, info):
         for entry in feed.entries:
             img_url = extract_image_from_entry(entry)
             pub_dt = parse_date(entry)
-
-            # Açıklama düz metin
             raw_desc_html = entry.get("description") or entry.get("summary", "")
             plain_desc = ""
             if raw_desc_html:
@@ -443,8 +429,8 @@ def fetch_single(source, info):
 
     return items
 
+
 def dedupe_items(items):
-    """Aynı link/title gelenleri ayıkla (bazı RSS'lerde tekrar gelebiliyor)"""
     seen = set()
     unique = []
     for it in items:
@@ -455,8 +441,8 @@ def dedupe_items(items):
         unique.append(it)
     return unique
 
+
 def fetch_rss(category="all"):
-    """Kategoriye göre RSS çek"""
     items = []
     sources = RSS_CATEGORIES.get(category, RSS_CATEGORIES["all"])
 
@@ -465,18 +451,15 @@ def fetch_rss(category="all"):
         for f in concurrent.futures.as_completed(futures):
             items.extend(f.result())
 
-    # Tekrarları temizle
     items = dedupe_items(items)
-
-    # Sıralama: en yeni → en eski
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
 
-    # 🔥 Tarih filtresi: breaking = 2 gün, diğerleri = 7 gün
     now = datetime.now(LOCAL_TZ)
     cutoff = now - (timedelta(days=2) if category == "breaking" else timedelta(days=7))
     items = [i for i in items if datetime.fromtimestamp(i["published_at_ms"]/1000, LOCAL_TZ) >= cutoff]
 
     return items
+
 
 @app.route("/rss")
 def get_rss():
@@ -491,6 +474,59 @@ def get_rss():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ✅ Yeni eklenen endpoint
+def extract_meta_from_url(url):
+    """Bir haber linkinden başlık, açıklama, görsel, tarih çıkarır"""
+    try:
+        resp = requests.get(url, timeout=10, headers=HTTP_HEADERS)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Başlık
+        title = None
+        if soup.find("meta", property="og:title"):
+            title = soup.find("meta", property="og:title").get("content")
+        if not title and soup.title:
+            title = soup.title.string
+
+        # Açıklama
+        description = None
+        if soup.find("meta", property="og:description"):
+            description = soup.find("meta", property="og:description").get("content")
+        elif soup.find("meta", attrs={"name": "description"}):
+            description = soup.find("meta", attrs={"name": "description"}).get("content")
+
+        # Görsel
+        image = None
+        if soup.find("meta", property="og:image"):
+            image = soup.find("meta", property="og:image").get("content")
+
+        # Yayın tarihi
+        published_at = None
+        if soup.find("meta", property="article:published_time"):
+            published_at = soup.find("meta", property="article:published_time").get("content")
+
+        return {
+            "title": title or "Başlık bulunamadı",
+            "description": description or "",
+            "image": image,
+            "publishedAt": published_at
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.route("/parse")
+def parse_url():
+    url = request.args.get("url")
+    if not url:
+        return jsonify({"error": "url parametresi gerekli"}), 400
+
+    data = extract_meta_from_url(url)
+    return jsonify(data)
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
