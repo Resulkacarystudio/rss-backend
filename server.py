@@ -27,8 +27,13 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 # =================================================
 app = Flask(__name__)
 # CORS ayarları → hem localhost hem resulkacar.com için izin ver
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "https://resulkacar.com"]}})
-
+CORS(app, resources={r"/*": {
+    "origins": [
+        "http://localhost:5173",
+        "https://resulkacar.com",
+        "https://brave-forgiveness.up.railway.app"
+    ]
+}})
 # Türkiye saat dilimi
 LOCAL_TZ = pytz.timezone("Europe/Istanbul")
 
