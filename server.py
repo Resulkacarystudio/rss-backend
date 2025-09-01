@@ -424,7 +424,7 @@ def fetch_rss(category="all"):
 
 
 def extract_meta_from_url(url):
-    """Bir haber linkinden başlık, açıklama, görsel, tarih ve tam içerik çıkarır"""
+    """Bir haber linkinden başlık, açıklama, görsel, tarih ve temizlenmiş içerik çıkarır"""
     try:
         resp = requests.get(
             url,
@@ -454,9 +454,9 @@ def extract_meta_from_url(url):
         published_at = published_at.get("content") if published_at else None
 
         # Eğer meta yoksa → sayfa metninden tarih ara (örn: 01.09.2025 - 16:37)
+        import re
+        raw_text = soup.get_text(" ", strip=True)
         if not published_at:
-            raw_text = soup.get_text(" ", strip=True)
-            import re
             match = re.search(r"\d{2}\.\d{2}\.\d{4}\s*-\s*\d{2}:\d{2}", raw_text)
             if match:
                 published_at = match.group(0)
@@ -464,15 +464,19 @@ def extract_meta_from_url(url):
         # İçerik (paragraflar birleştirilir)
         full_text = "\n".join([p.get_text() for p in soup.find_all("p") if p.get_text()])
 
+        # Eğer içerikte tarih satırı varsa → temizle
+        full_text = re.sub(r"^\s*\d{2}\.\d{2}\.\d{4}\s*-\s*\d{2}:\d{2}.*$", "", full_text, flags=re.MULTILINE)
+
         return {
             "title": title.strip() if title else "",
             "description": description.strip() if description else "",
             "image": image,
-            "publishedAt": published_at,
-            "fullText": full_text.strip(),
+            "publishedAt": published_at,   # ✅ sadece burada dönüyor
+            "fullText": full_text.strip(), # ✅ artık içinde tarih yok
         }
     except Exception as e:
         return {"error": str(e)}
+
 
 
 # =================================================
