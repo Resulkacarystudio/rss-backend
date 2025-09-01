@@ -27,7 +27,7 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 # =================================================
 app = Flask(__name__)
 # CORS ayarları → hem localhost hem resulkacar.com için izin ver
-CORS(app)  # tüm domainlere izin ver
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Türkiye saat dilimi
 LOCAL_TZ = pytz.timezone("Europe/Istanbul")
