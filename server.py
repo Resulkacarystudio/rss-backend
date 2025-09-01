@@ -437,18 +437,31 @@ def extract_meta_from_url(url):
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
 
+        # Başlık
         title = soup.find("meta", property="og:title")
         title = title.get("content") if title else (soup.title.string if soup.title else "Başlık bulunamadı")
 
+        # Açıklama
         description = soup.find("meta", property="og:description")
         description = description.get("content") if description else ""
 
+        # Görsel
         image = soup.find("meta", property="og:image")
         image = image.get("content") if image else None
 
+        # Yayınlanma zamanı (önce meta'dan dene)
         published_at = soup.find("meta", property="article:published_time")
         published_at = published_at.get("content") if published_at else None
 
+        # Eğer meta yoksa → sayfa metninden tarih ara (örn: 01.09.2025 - 16:37)
+        if not published_at:
+            raw_text = soup.get_text(" ", strip=True)
+            import re
+            match = re.search(r"\d{2}\.\d{2}\.\d{4}\s*-\s*\d{2}:\d{2}", raw_text)
+            if match:
+                published_at = match.group(0)
+
+        # İçerik (paragraflar birleştirilir)
         full_text = "\n".join([p.get_text() for p in soup.find_all("p") if p.get_text()])
 
         return {
@@ -460,6 +473,7 @@ def extract_meta_from_url(url):
         }
     except Exception as e:
         return {"error": str(e)}
+
 
 # =================================================
 # API Endpoint'ler
