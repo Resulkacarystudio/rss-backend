@@ -499,45 +499,28 @@ def parse_url():
 
 @app.route("/rewrite", methods=["POST"])
 def rewrite():
-    """Haberi OpenAI ile özgünleştir + başlık üret"""
     try:
-        data = request.get_json(force=True)
-        print("📩 Gelen data:", data)  # Debug
+        data = request.get_json()
+        print("📩 Gelen data:", data)
 
-        content = data.get("text", "").strip()
+        content = data.get("text", "")
         if not content:
             return jsonify({"error": "text parametresi gerekli"}), 400
 
+        print("🚀 OpenAI çağrısı başlıyor...")
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",   # önce burayı gpt-4o yap dene
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Sen deneyimli bir haber editörüsün. "
-                        "Haberi özgünleştirirken resmi bir haber dili kullan, "
-                        "gereksiz tekrarlar ve reklam amaçlı ifadeleri (örn: 'haber.com’u ziyaret edin') kesinlikle yazma. "
-                        "Kaynak adı veya yönlendirme linki ekleme. "
-                        "Olayın akışını net, tarafsız ve detaylı anlat. "
-                        "Metni daha uzun ve açıklayıcı yaz. "
-                        "Ayrıca haber için dikkat çekici ve anlamlı yeni bir başlık üret."
-                    )
-                },
+                {"role": "system", "content": "Sen deneyimli bir haber editörüsün..."},
                 {"role": "user", "content": content},
             ],
         )
+        print("✅ OpenAI cevabı:", completion)
 
-        print("✅ OpenAI cevabı:", completion)  # Debug log
-
-        # Bazı SDK sürümlerinde choices[0].message yerine dictionary geliyor
-        rewritten = completion.choices[0].message.get("content", "") \
-            if hasattr(completion.choices[0], "message") \
-            else completion.choices[0].get("message", {}).get("content", "")
-
+        rewritten = completion.choices[0].message.get("content", "")
         if not rewritten:
             return jsonify({"error": "OpenAI cevabı boş geldi"}), 500
 
-        # Başlık + içerik ayırma
         if "\n" in rewritten:
             parts = rewritten.split("\n", 1)
             title_ai = parts[0].strip()
@@ -551,9 +534,10 @@ def rewrite():
     except Exception as e:
         import traceback
         err_msg = f"{type(e).__name__}: {str(e)}"
-        print("❌ /rewrite hatası:", err_msg)
-        print(traceback.format_exc())  # Railway logs için
+        print("❌ REWRITE ERROR:", err_msg)
+        print(traceback.format_exc())
         return jsonify({"error": err_msg}), 500
+
 
 
 
