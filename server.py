@@ -1,48 +1,45 @@
+# ================================================
+# server.py - Haber API (RSS + Parse + Rewrite)
+# ================================================
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import requests
 import feedparser
 from bs4 import BeautifulSoup
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import pytz
 import os
 import concurrent.futures
-import re
-import openai
 from openai import OpenAI
 
-
-# OpenAI API anahtarı Railway'de "OPENAI_API_KEY" olarak tanımlı olmalı
+# =================================================
+# OpenAI client
+# =================================================
+# Railway dashboard → Variables → OPENAI_API_KEY tanımlanmalı
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
+# =================================================
+# Flask App & CORS
+# =================================================
 app = Flask(__name__)
 
-
-CORS(app, resources={r"/*": {"origins": "*"}})
-
+# CORS ayarları → hem localhost hem resulkacar.com için izin ver
+CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "https://resulkacar.com"]}})
 
 # Türkiye saat dilimi
 LOCAL_TZ = pytz.timezone("Europe/Istanbul")
 
-# Basit ve güvenli bir User-Agent (bazı kaynaklar istiyor)
+# HTTP headers (RSS kaynakları için güvenli UA)
 HTTP_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; HaberMerkezi/1.0; +https://example.com)",
+    "User-Agent": "Mozilla/5.0 (compatible; HaberMerkezi/1.0; +https://resulkacar.com)",
     "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
 }
-@app.after_request
-def add_cors_headers(response):
-    origin = request.headers.get("Origin")
-    allowed = ["https://resulkacar.com", "http://localhost:5173"]
-    if origin in allowed:
-        response.headers["Access-Control-Allow-Origin"] = origin
-    else:
-        response.headers["Access-Control-Allow-Origin"] = "https://resulkacar.com"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    return response
 
-
+# =================================================
+# RSS Kategorileri
+# =================================================
 # --- RSS Kaynakları kategorilere göre --- #
 RSS_CATEGORIES = {
     "all": {
@@ -315,6 +312,9 @@ RSS_CATEGORIES = {
         },
     }
 }
+# =================================================
+# Yardımcı Fonksiyonlar
+# =================================================
 def parse_date(entry):
     """RSS/Atom tarihini güvenli şekilde İstanbul saatine çevir"""
     dt = None
@@ -335,16 +335,18 @@ def parse_date(entry):
 
     return dt.astimezone(LOCAL_TZ)
 
+
 def extract_image_from_entry(entry):
-    """Farklı RSS formatlarındaki görselleri agresif şekilde yakalar."""
+    """RSS içinden görseli almaya çalışır"""
     if "enclosures" in entry and entry.enclosures:
         href = entry.enclosures[0].get("href")
         if href:
             return href
     return None
 
+
 def fetch_single(source, info):
-    """Tek bir kaynaktan haberleri getir"""
+    """Tek kaynaktan haberleri getir"""
     items = []
     try:
         resp = requests.get(info["url"], timeout=12, headers=HTTP_HEADERS)
@@ -359,24 +361,29 @@ def fetch_single(source, info):
             if raw_desc_html:
                 plain_desc = BeautifulSoup(raw_desc_html, "html.parser").get_text()
 
-            items.append({
-                "source": source,
-                "source_logo": info["logo"],
-                "source_color": info["color"],
-                "title": entry.get("title", "Başlık Yok"),
-                "link": entry.get("link", ""),
-                "pubDate": entry.get("published", "") or entry.get("updated", ""),
-                "published_at": pub_dt.isoformat(),
-                "published_at_ms": int(pub_dt.timestamp() * 1000),
-                "description": plain_desc.strip(),
-                "image": img_url
-            })
+            items.append(
+                {
+                    "source": source,
+                    "source_logo": info["logo"],
+                    "source_color": info["color"],
+                    "title": entry.get("title", "Başlık Yok"),
+                    "link": entry.get("link", ""),
+                    "pubDate": entry.get("published", "")
+                    or entry.get("updated", ""),
+                    "published_at": pub_dt.isoformat(),
+                    "published_at_ms": int(pub_dt.timestamp() * 1000),
+                    "description": plain_desc.strip(),
+                    "image": img_url,
+                }
+            )
     except Exception as e:
         print(f"{info['url']} okunamadı:", e)
 
     return items
 
+
 def dedupe_items(items):
+    """Aynı link + başlık olan haberleri teke indir"""
     seen = set()
     unique = []
     for it in items:
@@ -387,32 +394,22 @@ def dedupe_items(items):
         unique.append(it)
     return unique
 
+
 def fetch_rss(category="all"):
+    """Kategorideki tüm kaynaklardan haberleri getir"""
     items = []
     sources = RSS_CATEGORIES.get(category, RSS_CATEGORIES["all"])
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = [executor.submit(fetch_single, source, info) for source, info in sources.items()]
+        futures = [
+            executor.submit(fetch_single, source, info)
+            for source, info in sources.items()
+        ]
         for f in concurrent.futures.as_completed(futures):
             items.extend(f.result())
 
     items = dedupe_items(items)
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
     return items
-
-@app.route("/rss")
-def get_rss():
-    try:
-        category = request.args.get("category", "all")
-        all_items = fetch_rss(category)
-        return jsonify({
-            "origin": os.environ.get("RAILWAY_STATIC_URL", "local"),
-            "category": category,
-            "total": len(all_items),
-            "news": all_items
-        })
-    except Exception as e:
-        print("RSS error:", str(e))  # loga yaz
-        return jsonify({"error": str(e)}), 500
 
 
 def extract_meta_from_url(url):
@@ -423,44 +420,62 @@ def extract_meta_from_url(url):
             timeout=10,
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                              "AppleWebKit/537.36 (KHTML, like Gecko) "
-                              "Chrome/115 Safari/537.36",
-                "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8"
-            }
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/115 Safari/537.36",
+                "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
+            },
         )
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Başlık
         title = soup.find("meta", property="og:title")
         title = title.get("content") if title else (
             soup.title.string if soup.title else "Başlık bulunamadı"
         )
 
-        # Açıklama
         description = soup.find("meta", property="og:description")
         description = description.get("content") if description else ""
 
-        # Görsel
         image = soup.find("meta", property="og:image")
         image = image.get("content") if image else None
 
-        # Yayın tarihi
         published_at = soup.find("meta", property="article:published_time")
         published_at = published_at.get("content") if published_at else None
 
-        # Tam içerik
-        full_text = "\n".join([p.get_text() for p in soup.find_all("p") if p.get_text()])
+        full_text = "\n".join(
+            [p.get_text() for p in soup.find_all("p") if p.get_text()]
+        )
 
         return {
             "title": title.strip() if title else "",
             "description": description.strip() if description else "",
             "image": image,
             "publishedAt": published_at,
-            "fullText": full_text.strip()
+            "fullText": full_text.strip(),
         }
     except Exception as e:
         return {"error": str(e)}
+
+# =================================================
+# API Endpoint'ler
+# =================================================
+@app.route("/rss")
+def get_rss():
+    """RSS endpoint → kategoriye göre haberleri döner"""
+    try:
+        category = request.args.get("category", "all")
+        all_items = fetch_rss(category)
+        return jsonify(
+            {
+                "origin": os.environ.get("RAILWAY_STATIC_URL", "local"),
+                "category": category,
+                "total": len(all_items),
+                "news": all_items,
+            }
+        )
+    except Exception as e:
+        print("RSS error:", str(e))
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/parse")
@@ -479,9 +494,9 @@ def parse_url():
         return jsonify({"error": f"Parse başarısız: {str(e)}"}), 500
 
 
-
 @app.route("/rewrite", methods=["POST"])
 def rewrite():
+    """Haberi OpenAI ile özgünleştir"""
     data = request.get_json()
     content = data.get("text", "")
     if not content:
@@ -491,16 +506,21 @@ def rewrite():
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Sen deneyimli bir haber editörüsün. Haberi özgünleştir ve akıcı yaz."},
-                {"role": "user", "content": content}
-            ]
+                {
+                    "role": "system",
+                    "content": "Sen deneyimli bir haber editörüsün. Haberi özgünleştir ve akıcı yaz.",
+                },
+                {"role": "user", "content": content},
+            ],
         )
         rewritten = completion.choices[0].message.content
         return jsonify({"rewritten": rewritten})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
+# =================================================
+# Main
+# =================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
