@@ -17,7 +17,7 @@ openai.api_key = os.environ.get("OPENAI_API_KEY")
 app = Flask(__name__)
 
 
-CORS(app)  # 🔓 Burada domain kısıtlaması yok, herkes erişebilir
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 
 # Türkiye saat dilimi
