@@ -422,7 +422,6 @@ def fetch_rss(category="all"):
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
     return items
 
-
 def extract_meta_from_url(url):
     """Bir haber linkinden başlık, açıklama, görsel, tarih ve temizlenmiş içerik çıkarır"""
     try:
@@ -450,16 +449,24 @@ def extract_meta_from_url(url):
         image = image.get("content") if image else None
 
         # Yayınlanma zamanı (önce meta'dan dene)
-        published_at = soup.find("meta", property="article:published_time")
-        published_at = published_at.get("content") if published_at else None
+        published_at = None
+        meta_time = soup.find("meta", property="article:published_time")
+        if meta_time and meta_time.get("content"):
+            published_at = meta_time.get("content")
 
         # Eğer meta yoksa → sayfa metninden tarih ara (örn: 01.09.2025 - 16:37)
         import re
         raw_text = soup.get_text(" ", strip=True)
         if not published_at:
-            match = re.search(r"\d{2}\.\d{2}\.\d{4}\s*-\s*\d{2}:\d{2}", raw_text)
+            match = re.search(r"(\d{2})\.(\d{2})\.(\d{4})\s*-\s*(\d{2}):(\d{2})", raw_text)
             if match:
-                published_at = match.group(0)
+                day, month, year, hour, minute = match.groups()
+                dt = datetime(int(year), int(month), int(day), int(hour), int(minute), tzinfo=LOCAL_TZ)
+                published_at = dt.isoformat()
+
+        # Eğer hala yoksa şimdiki zamanı koy
+        if not published_at:
+            published_at = datetime.now(LOCAL_TZ).isoformat()
 
         # İçerik (paragraflar birleştirilir)
         full_text = "\n".join([p.get_text() for p in soup.find_all("p") if p.get_text()])
@@ -471,11 +478,12 @@ def extract_meta_from_url(url):
             "title": title.strip() if title else "",
             "description": description.strip() if description else "",
             "image": image,
-            "publishedAt": published_at,   # ✅ sadece burada dönüyor
-            "fullText": full_text.strip(), # ✅ artık içinde tarih yok
+            "publishedAt": published_at,   # ✅ artık her zaman ISO formatında
+            "fullText": full_text.strip(),
         }
     except Exception as e:
         return {"error": str(e)}
+
 
 
 
@@ -527,7 +535,7 @@ def rewrite():
 
         print("🚀 OpenAI çağrısı başlıyor...")
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",   # ücretsiz için gpt-4o-mini, ücretli açarsan gpt-4o
+            model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",
@@ -538,27 +546,28 @@ def rewrite():
                         "Reklam, yönlendirme (örn: 'haber.com’u ziyaret edin'), kaynak ismi veya link kullanma. "
                         "Sadece haberin kendisine odaklan. "
                         "Son cümlede haberi özetleyici güçlü bir ifade ekle. "
-                        "Başta dikkat çekici yeni bir başlık üret, ardından uzun haber metni yaz."
+                        "Ayrıca haberi sınıflandır: 'spor', 'siyaset', 'gündem', 'ekonomi', 'dünya', 'magazin', 'sağlık', 'teknoloji', 'eğitim', 'kültür-sanat' gibi."
+                        "Sonucu JSON formatında döndür: {\"title\": ..., \"body\": ..., \"category\": ...}"
                     ),
                 },
                 {"role": "user", "content": content},
             ],
+            response_format={ "type": "json_object" }  # ✅ direkt JSON dönecek
         )
         print("✅ OpenAI cevabı:", completion)
 
-        rewritten = completion.choices[0].message.content
-        if not rewritten:
-            return jsonify({"error": "OpenAI cevabı boş geldi"}), 500
+        rewritten_json = completion.choices[0].message.content
+        import json
+        try:
+            parsed = json.loads(rewritten_json)
+        except Exception:
+            return jsonify({"error": "JSON parse edilemedi", "raw": rewritten_json}), 500
 
-        if "\n" in rewritten:
-            parts = rewritten.split("\n", 1)
-            title_ai = parts[0].strip()
-            body_ai = parts[1].strip()
-        else:
-            title_ai = rewritten[:60] + "..."
-            body_ai = rewritten
-
-        return jsonify({"title_ai": title_ai, "rewritten": body_ai})
+        return jsonify({
+            "title_ai": parsed.get("title"),
+            "rewritten": parsed.get("body"),
+            "category": parsed.get("category")
+        })
 
     except Exception as e:
         import traceback
@@ -566,6 +575,7 @@ def rewrite():
         print("❌ REWRITE ERROR:", err_msg)
         print(traceback.format_exc())
         return jsonify({"error": err_msg}), 500
+
 
 
 
