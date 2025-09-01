@@ -15,8 +15,10 @@ import openai
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 app = Flask(__name__)
-# 👇 Tüm originlere izin veriyoruz (gerekirse sadece frontend adresini ekleyebilirsin)
-CORS(app, resources={r"/*": {"origins": "*"}})
+
+# ✅ Sadece resulkacar.com alan adına izin ver
+CORS(app, resources={r"/*": {"origins": "https://resulkacar.com"}}, supports_credentials=True)
+
 
 # Türkiye saat dilimi
 LOCAL_TZ = pytz.timezone("Europe/Istanbul")
@@ -26,7 +28,12 @@ HTTP_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; HaberMerkezi/1.0; +https://example.com)",
     "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
 }
-
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "https://resulkacar.com"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
 # --- RSS Kaynakları kategorilere göre --- #
 RSS_CATEGORIES = {
     "all": {
