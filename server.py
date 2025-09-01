@@ -16,8 +16,8 @@ openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 app = Flask(__name__)
 
-# ✅ Sadece resulkacar.com alan adına izin ver
-CORS(app, resources={r"/*": {"origins": "https://resulkacar.com"}}, supports_credentials=True)
+
+CORS(app)  # 🔓 Burada domain kısıtlaması yok, herkes erişebilir
 
 
 # Türkiye saat dilimi
