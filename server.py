@@ -9,7 +9,9 @@ import pytz
 import os
 import concurrent.futures
 import re
+import openai
 
+openai.api_key = os.environ.get("OPENAI_API_KEY")
 app = Flask(__name__)
 CORS(app)
 
@@ -523,7 +525,26 @@ def extract_meta_from_url(url):
     except Exception as e:
         return {"error": str(e)}
 
+@app.route("/rewrite", methods=["POST"])
+def rewrite():
+    data = request.get_json()
+    content = data.get("text", "")
 
+    if not content:
+        return jsonify({"error": "text parametresi gerekli"}), 400
+
+    try:
+        completion = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Sen deneyimli bir haber editörüsün. Haberi özgünleştir ve akıcı yaz."},
+                {"role": "user", "content": content}
+            ]
+        )
+        rewritten = completion.choices[0].message["content"]
+        return jsonify({"rewritten": rewritten})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/parse")
 def parse_url():
