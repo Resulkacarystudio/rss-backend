@@ -496,35 +496,45 @@ def parse_url():
     except Exception as e:
         return jsonify({"error": f"Parse başarısız: {str(e)}"}), 500
 
-
 @app.route("/rewrite", methods=["POST"])
 def rewrite():
     """Haberi OpenAI ile özgünleştir + başlık üret"""
-    data = request.get_json()
-    content = data.get("text", "")
-    if not content:
-        return jsonify({"error": "text parametresi gerekli"}), 400
     try:
+        data = request.get_json(force=True)
+        print("📩 Gelen data:", data)  # Debug
+
+        content = data.get("text", "").strip()
+        if not content:
+            return jsonify({"error": "text parametresi gerekli"}), 400
+
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-               {
-  "role": "system",
-  "content": (
-    "Sen deneyimli bir haber editörüsün. "
-    "Haberi özgünleştirirken resmi bir haber dili kullan, "
-    "gereksiz tekrarlar ve reklam amaçlı ifadeleri (örn: 'haber.com’u ziyaret edin') kesinlikle yazma. "
-    "Kaynak adı veya yönlendirme linki ekleme. "
-    "Olayın akışını net, tarafsız ve detaylı anlat. "
-    "Metni daha uzun ve açıklayıcı yaz. "
-    "Ayrıca haber için dikkat çekici ve anlamlı yeni bir başlık üret."
-  )
-}
-,
+                {
+                    "role": "system",
+                    "content": (
+                        "Sen deneyimli bir haber editörüsün. "
+                        "Haberi özgünleştirirken resmi bir haber dili kullan, "
+                        "gereksiz tekrarlar ve reklam amaçlı ifadeleri (örn: 'haber.com’u ziyaret edin') kesinlikle yazma. "
+                        "Kaynak adı veya yönlendirme linki ekleme. "
+                        "Olayın akışını net, tarafsız ve detaylı anlat. "
+                        "Metni daha uzun ve açıklayıcı yaz. "
+                        "Ayrıca haber için dikkat çekici ve anlamlı yeni bir başlık üret."
+                    )
+                },
                 {"role": "user", "content": content},
             ],
         )
-        rewritten = completion.choices[0].message.content
+
+        print("✅ OpenAI cevabı:", completion)  # Debug log
+
+        # Bazı SDK sürümlerinde choices[0].message yerine dictionary geliyor
+        rewritten = completion.choices[0].message.get("content", "") \
+            if hasattr(completion.choices[0], "message") \
+            else completion.choices[0].get("message", {}).get("content", "")
+
+        if not rewritten:
+            return jsonify({"error": "OpenAI cevabı boş geldi"}), 500
 
         # Başlık + içerik ayırma
         if "\n" in rewritten:
@@ -536,8 +546,14 @@ def rewrite():
             body_ai = rewritten
 
         return jsonify({"title_ai": title_ai, "rewritten": body_ai})
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        err_msg = f"{type(e).__name__}: {str(e)}"
+        print("❌ /rewrite hatası:", err_msg)
+        print(traceback.format_exc())  # Railway logs için
+        return jsonify({"error": err_msg}), 500
+
 
 
 def get_db_connection():
