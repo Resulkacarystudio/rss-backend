@@ -477,15 +477,10 @@ def get_rss():
 
 
 def extract_meta_from_url(url):
-    """Bir haber linkinden başlık, açıklama, görsel, tarih çıkarır"""
+    """Bir haber linkinden başlık, açıklama, görsel, tarih ve tam içerik çıkarır"""
     try:
-        print("Fetching:", url)   # ✅ hangi URL çağrıldığını göreceksin
-
         resp = requests.get(url, timeout=10, headers=HTTP_HEADERS)
         resp.raise_for_status()
-        
-        print("Status code:", resp.status_code)  # ✅ yanıt kodunu gör
-
         soup = BeautifulSoup(resp.text, "html.parser")
 
         # Başlık
@@ -495,7 +490,7 @@ def extract_meta_from_url(url):
         if not title and soup.title:
             title = soup.title.string
 
-        # Açıklama
+        # Açıklama (özet)
         description = None
         if soup.find("meta", property="og:description"):
             description = soup.find("meta", property="og:description").get("content")
@@ -512,14 +507,20 @@ def extract_meta_from_url(url):
         if soup.find("meta", property="article:published_time"):
             published_at = soup.find("meta", property="article:published_time").get("content")
 
+        # 🔥 Tam içerik (haber metni)
+        full_text = ""
+        paragraphs = soup.find_all("p")
+        if paragraphs:
+            full_text = "\n".join([p.get_text() for p in paragraphs if p.get_text()])
+
         return {
             "title": title or "Başlık bulunamadı",
             "description": description or "",
             "image": image,
-            "publishedAt": published_at
+            "publishedAt": published_at,
+            "fullText": full_text.strip()
         }
     except Exception as e:
-        print("Error fetching URL:", e)   # ✅ hata mesajını terminalde gör
         return {"error": str(e)}
 
 
