@@ -13,6 +13,8 @@ import pytz
 import os
 import concurrent.futures
 from openai import OpenAI
+import pymysql
+import os
 
 # =================================================
 # OpenAI client
@@ -527,6 +529,38 @@ def rewrite():
             body_ai = rewritten
 
         return jsonify({"title_ai": title_ai, "rewritten": body_ai})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def get_db_connection():
+    return pymysql.connect(
+        host=os.environ.get("DB_HOST"),
+        user=os.environ.get("DB_USER"),
+        password=os.environ.get("DB_PASS"),
+        database=os.environ.get("DB_NAME"),
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor
+    )
+
+@app.route("/save", methods=["POST"])
+def save_news():
+    data = request.get_json()
+    title = data.get("title")
+    content = data.get("content")
+    image = data.get("image")
+
+    if not title or not content:
+        return jsonify({"error": "title ve content gerekli"}), 400
+
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            sql = "INSERT INTO haberList (title, content, image, created_at) VALUES (%s, %s, %s, NOW())"
+            cursor.execute(sql, (title, content, image))
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True, "message": "Haber kaydedildi"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
