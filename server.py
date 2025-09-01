@@ -509,7 +509,7 @@ def rewrite():
 
         print("🚀 OpenAI çağrısı başlıyor...")
         completion = client.chat.completions.create(
-            model="gpt-4o",   # önce burayı gpt-4o yap dene
+            model="gpt-4o-mini",   # önce burayı gpt-4o yap dene
             messages=[
                 {"role": "system", "content": "Sen deneyimli bir haber editörüsün..."},
                 {"role": "user", "content": content},
