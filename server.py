@@ -12,7 +12,7 @@ import re
 import openai
 
 # OpenAI API anahtarı Railway'de "OPENAI_API_KEY" olarak tanımlı olmalı
-openai.api_key = os.environ.get("OPENAI_API_KEY")
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 app = Flask(__name__)
 
@@ -455,7 +455,7 @@ def rewrite():
         return jsonify({"error": "text parametresi gerekli"}), 400
 
     try:
-        completion = openai.chat.completions.create(
+        completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "Sen deneyimli bir haber editörüsün. Haberi özgünleştir ve akıcı yaz."},
@@ -466,6 +466,7 @@ def rewrite():
         return jsonify({"rewritten": rewritten})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
