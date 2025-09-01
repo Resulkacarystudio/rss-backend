@@ -30,10 +30,14 @@ HTTP_HEADERS = {
 }
 @app.after_request
 def add_cors_headers(response):
-    response.headers["Access-Control-Allow-Origin"] = "https://resulkacar.com"
+    origin = request.headers.get("Origin")
+    allowed = ["https://resulkacar.com", "http://localhost:5173"]
+    if origin in allowed:
+        response.headers["Access-Control-Allow-Origin"] = origin
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return response
+
 # --- RSS Kaynakları kategorilere göre --- #
 RSS_CATEGORIES = {
     "all": {
