@@ -476,12 +476,16 @@ def get_rss():
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Yeni eklenen endpoint
 def extract_meta_from_url(url):
     """Bir haber linkinden başlık, açıklama, görsel, tarih çıkarır"""
     try:
+        print("Fetching:", url)   # ✅ hangi URL çağrıldığını göreceksin
+
         resp = requests.get(url, timeout=10, headers=HTTP_HEADERS)
         resp.raise_for_status()
+        
+        print("Status code:", resp.status_code)  # ✅ yanıt kodunu gör
+
         soup = BeautifulSoup(resp.text, "html.parser")
 
         # Başlık
@@ -515,7 +519,9 @@ def extract_meta_from_url(url):
             "publishedAt": published_at
         }
     except Exception as e:
+        print("Error fetching URL:", e)   # ✅ hata mesajını terminalde gör
         return {"error": str(e)}
+
 
 
 @app.route("/parse")
