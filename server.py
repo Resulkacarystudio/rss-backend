@@ -509,17 +509,26 @@ def rewrite():
 
         print("🚀 OpenAI çağrısı başlıyor...")
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",   # veya gpt-4o (eğer billing açarsan)
+            model="gpt-4o-mini",   # ücretsiz için gpt-4o-mini, ücretli açarsan gpt-4o
             messages=[
-                {"role": "system", "content": "Sen deneyimli bir haber editörüsün..."},
+                {
+                    "role": "system",
+                    "content": (
+                        "Sen deneyimli bir haber editörüsün. "
+                        "Haberi yeniden yazarken resmi bir haber dili kullan. "
+                        "Olayları detaylandır, bağlam ekle, haberi uzat ve anlaşılır kıl. "
+                        "Reklam, yönlendirme (örn: 'haber.com’u ziyaret edin'), kaynak ismi veya link kullanma. "
+                        "Sadece haberin kendisine odaklan. "
+                        "Son cümlede haberi özetleyici güçlü bir ifade ekle. "
+                        "Başta dikkat çekici yeni bir başlık üret, ardından uzun haber metni yaz."
+                    ),
+                },
                 {"role": "user", "content": content},
             ],
         )
         print("✅ OpenAI cevabı:", completion)
 
-        # 🔧 Burayı değiştirdik
         rewritten = completion.choices[0].message.content
-
         if not rewritten:
             return jsonify({"error": "OpenAI cevabı boş geldi"}), 500
 
@@ -539,7 +548,6 @@ def rewrite():
         print("❌ REWRITE ERROR:", err_msg)
         print(traceback.format_exc())
         return jsonify({"error": err_msg}), 500
-
 
 
 
