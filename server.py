@@ -10,6 +10,8 @@ import os
 import concurrent.futures
 import re
 import openai
+from openai import OpenAI
+
 
 # OpenAI API anahtarı Railway'de "OPENAI_API_KEY" olarak tanımlı olmalı
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
@@ -411,27 +413,43 @@ def get_rss():
 def extract_meta_from_url(url):
     """Bir haber linkinden başlık, açıklama, görsel, tarih ve tam içerik çıkarır"""
     try:
-        resp = requests.get(url, timeout=10, headers=HTTP_HEADERS)
+        resp = requests.get(
+            url,
+            timeout=10,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                              "AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/115 Safari/537.36",
+                "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8"
+            }
+        )
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
 
+        # Başlık
         title = soup.find("meta", property="og:title")
-        title = title.get("content") if title else soup.title.string if soup.title else "Başlık bulunamadı"
+        title = title.get("content") if title else (
+            soup.title.string if soup.title else "Başlık bulunamadı"
+        )
 
+        # Açıklama
         description = soup.find("meta", property="og:description")
         description = description.get("content") if description else ""
 
+        # Görsel
         image = soup.find("meta", property="og:image")
         image = image.get("content") if image else None
 
+        # Yayın tarihi
         published_at = soup.find("meta", property="article:published_time")
         published_at = published_at.get("content") if published_at else None
 
+        # Tam içerik
         full_text = "\n".join([p.get_text() for p in soup.find_all("p") if p.get_text()])
 
         return {
-            "title": title,
-            "description": description,
+            "title": title.strip() if title else "",
+            "description": description.strip() if description else "",
             "image": image,
             "publishedAt": published_at,
             "fullText": full_text.strip()
@@ -439,13 +457,23 @@ def extract_meta_from_url(url):
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.route("/parse")
 def parse_url():
+    """Frontend'den gelen haber linkini alır ve detaylı verileri döner"""
     url = request.args.get("url")
     if not url:
         return jsonify({"error": "url parametresi gerekli"}), 400
-    data = extract_meta_from_url(url)
-    return jsonify(data)
+
+    try:
+        data = extract_meta_from_url(url)
+        if not data or "error" in data:
+            return jsonify({"error": data.get("error", "Bilinmeyen hata")}), 500
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": f"Parse başarısız: {str(e)}"}), 500
+
+
 
 @app.route("/rewrite", methods=["POST"])
 def rewrite():
