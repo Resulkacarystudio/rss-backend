@@ -29,6 +29,13 @@ app = Flask(__name__)
 # CORS ayarları → hem localhost hem resulkacar.com için izin ver
 CORS(app, resources={r"/*": {"origins": "*"}})
 
+@app.after_request
+def apply_cors(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    return response
+
 # Türkiye saat dilimi
 LOCAL_TZ = pytz.timezone("Europe/Istanbul")
 
