@@ -738,27 +738,29 @@ def save_news():
     if not title or not content:
         return jsonify({"error": "title ve content gerekli"}), 400
 
-    # ✅ Gelen tarihi normalize et
+    # ✅ Tarihi normalize et
     dt = parse_tr_date(published_at_raw) if published_at_raw else datetime.now(LOCAL_TZ)
     if not dt:
         dt = datetime.now(LOCAL_TZ)
+    published_at_db = dt.strftime("%Y-%m-%d %H:%M:%S")
 
-    # DB'ye yazarken standart format (datetime kolonuna güvenli):
-    published_at_db = dt.astimezone(LOCAL_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    # ✅ Slug üret
+    slug = slugify_title(title)
 
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
             sql = """
-                INSERT INTO haberList (title, content, image, published_at, category, created_at)
-                VALUES (%s, %s, %s, %s, %s, NOW())
+                INSERT INTO haberList (title, slug, content, image, published_at, category, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
             """
-            cursor.execute(sql, (title, content, image, published_at_db, category))
+            cursor.execute(sql, (title, slug, content, image, published_at_db, category))
         conn.commit()
         conn.close()
         return jsonify({"success": True, "message": "Haber kaydedildi"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
     
 
@@ -927,18 +929,22 @@ def save_ai_news(title, content, image, published_at, category):
             dt = datetime.now(LOCAL_TZ)
         published_at_db = dt.strftime("%Y-%m-%d %H:%M:%S")
 
+        # ✅ Slug üret
+        slug = slugify_title(title)
+
         conn = get_db_connection()
         with conn.cursor() as cursor:
             sql = """
-                INSERT INTO haberList (title, content, image, category, published_at, created_at)
-                VALUES (%s, %s, %s, %s, %s, NOW())
+                INSERT INTO haberList (title, slug, content, image, category, published_at, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
             """
-            cursor.execute(sql, (title, content, image, category, published_at_db))
+            cursor.execute(sql, (title, slug, content, image, category, published_at_db))
         conn.commit()
         conn.close()
         print(f"✅ Yeni haber kaydedildi: {title}")
     except Exception as e:
         print("Kaydetme hatası:", e)
+
 def fetch_and_process(category="all"):
     print(f"🚀 {category} kategorisi için yeni haberler kontrol ediliyor...")
     items = fetch_rss(category)
