@@ -450,15 +450,40 @@ def extract_meta_from_url(url):
         image = soup.find("meta", property="og:image")
         image = image.get("content") if image else None
 
-        # Yayınlanma zamanı
+        raw_text = soup.get_text(" ", strip=True)
+
         published_at = None
+        updated_at = None
+
+        # 1. Meta tag kontrolü
         meta_time = soup.find("meta", property="article:published_time")
         if meta_time and meta_time.get("content"):
             published_at = meta_time.get("content")
 
-        raw_text = soup.get_text(" ", strip=True)
+        # 2. Eğer meta yoksa → "Giriş Tarihi" satırını ara
+        if not published_at:
+            match = re.search(r"Giriş Tarihi:\s*([0-9\.\s:]+)", raw_text)
+            if match:
+                dt = dateparser.parse(
+                    match.group(1),
+                    languages=["tr"],
+                    settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True}
+                )
+                if dt:
+                    published_at = dt.isoformat()
 
-        # Eğer meta yoksa → metinden ara
+        # 3. "Son Güncelleme" varsa ayrıca çıkar
+        match_update = re.search(r"Son Güncelleme:\s*([0-9\.\s:]+)", raw_text)
+        if match_update:
+            dt = dateparser.parse(
+                match_update.group(1),
+                languages=["tr"],
+                settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True}
+            )
+            if dt:
+                updated_at = dt.isoformat()
+
+        # 4. Fallback → dateparser ile genel tarama
         if not published_at:
             dt = dateparser.parse(
                 raw_text,
@@ -468,27 +493,19 @@ def extract_meta_from_url(url):
             if dt:
                 published_at = dt.isoformat()
 
-        # Eğer hala yoksa → regex fallback
-        if not published_at:
-            match = re.search(r"(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})", raw_text)
-            if match:
-                day, month, year, hour, minute = match.groups()
-                dt = datetime(int(year), int(month), int(day), int(hour), int(minute), tzinfo=LOCAL_TZ)
-                published_at = dt.isoformat()
-
-        # Son çare: şu anki zamanı ata
+        # 5. Son çare → şimdi
         if not published_at:
             published_at = datetime.now(LOCAL_TZ).isoformat()
 
         # İçerik
         full_text = "\n".join([p.get_text() for p in soup.find_all("p") if p.get_text()])
-        full_text = re.sub(r"^\s*\d{2}\.\d{2}\.\d{4}\s*-\s*\d{2}:\d{2}.*$", "", full_text, flags=re.MULTILINE)
 
         return {
             "title": title.strip() if title else "",
             "description": description.strip() if description else "",
             "image": image,
-            "publishedAt": published_at,   # ✅ artık ne bulursa ISO formatında
+            "publishedAt": published_at,
+            "updatedAt": updated_at,   # ✅ İstersen frontende de gösterebilirsin
             "fullText": full_text.strip(),
         }
     except Exception as e:
