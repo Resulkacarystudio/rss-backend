@@ -448,15 +448,25 @@ def extract_meta_from_url(url):
         image = soup.find("meta", property="og:image")
         image = image.get("content") if image else None
 
-        # Yayınlanma zamanı (önce meta'dan dene)
+        # Yayınlanma zamanı
         published_at = None
         meta_time = soup.find("meta", property="article:published_time")
         if meta_time and meta_time.get("content"):
             published_at = meta_time.get("content")
 
-        # Eğer meta yoksa → sayfa metninden tarih ara (örn: 01.09.2025 - 16:37)
         import re
         raw_text = soup.get_text(" ", strip=True)
+
+        # yyyy-MM-dd HH:mm:ss
+        if not published_at:
+            match = re.search(r"(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?", raw_text)
+            if match:
+                year, month, day, hour, minute, second = match.groups()
+                second = second or "00"
+                dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second), tzinfo=LOCAL_TZ)
+                published_at = dt.isoformat()
+
+        # dd.MM.yyyy - HH:mm
         if not published_at:
             match = re.search(r"(\d{2})\.(\d{2})\.(\d{4})\s*-\s*(\d{2}):(\d{2})", raw_text)
             if match:
@@ -464,25 +474,24 @@ def extract_meta_from_url(url):
                 dt = datetime(int(year), int(month), int(day), int(hour), int(minute), tzinfo=LOCAL_TZ)
                 published_at = dt.isoformat()
 
-        # Eğer hala yoksa şimdiki zamanı koy
+        # fallback
         if not published_at:
             published_at = datetime.now(LOCAL_TZ).isoformat()
 
-        # İçerik (paragraflar birleştirilir)
+        # İçerik
         full_text = "\n".join([p.get_text() for p in soup.find_all("p") if p.get_text()])
-
-        # Eğer içerikte tarih satırı varsa → temizle
         full_text = re.sub(r"^\s*\d{2}\.\d{2}\.\d{4}\s*-\s*\d{2}:\d{2}.*$", "", full_text, flags=re.MULTILINE)
 
         return {
             "title": title.strip() if title else "",
             "description": description.strip() if description else "",
             "image": image,
-            "publishedAt": published_at,   # ✅ artık her zaman ISO formatında
+            "publishedAt": published_at,
             "fullText": full_text.strip(),
         }
     except Exception as e:
         return {"error": str(e)}
+
 
 
 
