@@ -653,12 +653,18 @@ def save_news():
 
 @app.route("/news", methods=["GET"])
 def get_saved_news():
+    """Veritabanındaki haberleri getir (sayfalama destekli)"""
     try:
         limit = int(request.args.get("limit", 20))   # default 20
-        offset = int(request.args.get("offset", 0))  # default 0
+        offset = int(request.args.get("offset", 0))
 
         conn = get_db_connection()
         with conn.cursor() as cursor:
+            # Toplam kaç kayıt var?
+            cursor.execute("SELECT COUNT(*) AS total FROM haberList")
+            total = cursor.fetchone()["total"]
+
+            # Sayfalı veriler
             sql = """
                 SELECT id, title, content, image, category, published_at, created_at
                 FROM haberList
@@ -669,9 +675,10 @@ def get_saved_news():
             rows = cursor.fetchall()
         conn.close()
 
-        return jsonify({"success": True, "news": rows})
+        return jsonify({"success": True, "news": rows, "total": total})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
 
 
 
