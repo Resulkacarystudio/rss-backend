@@ -800,6 +800,40 @@ def get_saved_news():
 
         conn.close()
 
+        @app.route("/news/<int:news_id>", methods=["GET"])
+def get_news_by_id(news_id):
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            sql = """
+                SELECT id, title, content, image, category, published_at, created_at
+                FROM haberList
+                WHERE id = %s
+                LIMIT 1
+            """
+            cursor.execute(sql, (news_id,))
+            row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({"success": False, "error": "Haber bulunamadı"}), 404
+
+        # ✅ published_at tarihini ISO formatına çevir
+        dt = row.get("published_at")
+        if isinstance(dt, datetime):
+            if dt.tzinfo is None:
+                dt = LOCAL_TZ.localize(dt)
+            row["published_at"] = dt.astimezone(LOCAL_TZ).isoformat()
+        elif isinstance(dt, str):
+            parsed = parse_tr_date(dt)
+            if parsed:
+                row["published_at"] = parsed.astimezone(LOCAL_TZ).isoformat()
+
+        return jsonify({"success": True, "news": row})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
         # ✅ Her kaydın published_at'ını ISO'ya çevir
         normalized = []
         for r in rows:
