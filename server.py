@@ -981,31 +981,50 @@ def get_news_by_id(news_id):
 
 
 
+
 def fetch_and_process(category="all"):
     print(f"🚀 {category} kategorisi için yeni haberler kontrol ediliyor...")
     items = fetch_rss(category)
 
     for item in items:
-        title = item["title"]
-        link = item["link"]
-        if news_exists(title, link):
-            continue  # zaten var
+        try:
+            title = item["title"]
+            link = item["link"]
 
-        # ham içerik
-        raw_text = f"{title}\n\n{item.get('description') or ''}"
+            # Haber daha önce kaydedilmiş mi?
+            if news_exists(title, link):
+                continue  # zaten var → atla
 
-        # yapay zekâya gönder
-        ai_result = rewrite_with_ai(raw_text)
-        if not ai_result:
+            # 🔹 Haberin tam içeriğini çek
+            meta = extract_meta_from_url(link)
+            full_text = ""
+            if meta and "fullText" in meta:
+                full_text = meta["fullText"]
+
+            # Eğer fullText boşsa RSS özetini fallback olarak kullan
+            if not full_text:
+                full_text = item.get("description") or ""
+
+            raw_text = f"{title}\n\n{full_text}"
+
+            # 🔹 Yapay zekâya gönder
+            ai_result = rewrite_with_ai(raw_text)
+            if not ai_result:
+                print(f"⚠️ AI sonucu alınamadı: {title}")
+                continue
+
+            # 🔹 Veritabanına kaydet
+            save_ai_news(
+                title=ai_result.get("title") or title,
+                content=ai_result.get("body") or full_text,
+                image=item.get("image"),
+                published_at=item.get("published_at"),
+                category=ai_result.get("category") or category,
+            )
+        except Exception as e:
+            print(f"❌ Hata oluştu ({title}):", e)
             continue
 
-        save_ai_news(
-            title=ai_result.get("title") or title,
-            content=ai_result.get("body") or (item.get("description") or ""),
-            image=item.get("image"),
-            published_at=item.get("published_at"),
-            category=ai_result.get("category") or category,
-        )
 @app.route("/cron")
 def run_cron():
     category = request.args.get("category", "all")
