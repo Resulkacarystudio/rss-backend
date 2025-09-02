@@ -40,20 +40,29 @@ def parse_tr_date(txt):
     if not txt:
         return None
     try:
+        # Önce açıkça bilinen formatları dene
+        for fmt in ["%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M", "%d.%m.%Y"]:
+            try:
+                return datetime.strptime(txt, fmt).replace(tzinfo=LOCAL_TZ)
+            except ValueError:
+                continue
+
+        # Eğer yukarıdakiler olmadıysa dateparser fallback
         dt = dateparser.parse(
             txt,
-            languages=["tr", "en"],   # Türkçe ve İngilizce tarih formatlarını anla
+            languages=["tr"],
             settings={
                 "TIMEZONE": "Europe/Istanbul",
                 "TO_TIMEZONE": "Europe/Istanbul",
                 "RETURN_AS_TIMEZONE_AWARE": True,
-                "PREFER_DATES_FROM": "past",
-                "DATE_ORDER": "DMY",  # Önce gün sonra ay
+                "DATE_ORDER": "DMY",  # Gün → Ay → Yıl
+                "STRICT_PARSING": True,
             },
         )
         return dt
     except Exception:
         return None
+
 
 
 def _first_meta(soup, selectors):
