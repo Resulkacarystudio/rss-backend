@@ -424,8 +424,7 @@ def fetch_rss(category="all"):
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
     return items
 
-import re
-import dateparser
+
 
 def extract_meta_from_url(url):
     try:
@@ -457,35 +456,53 @@ def extract_meta_from_url(url):
         published_at = None
         updated_at = None
 
-        # 1. Meta time
+        # 1. Meta published_time
         meta_time = soup.find("meta", property="article:published_time")
         if meta_time and meta_time.get("content"):
             published_at = meta_time.get("content")
 
-        # 2. "Giriş Tarihi"
+        # 2. YYYY-MM-DD HH:MM:SS
         if not published_at:
-            match = re.search(r"Giriş Tarihi:\s*([0-9\.]+\s*-\s*[0-9:]+)", raw_text)
-            if match:
-                dt = dateparser.parse(match.group(1), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
-                if dt:
-                    published_at = dt.isoformat()
-
-        # 3. "Son Güncelleme"
-        match_update = re.search(r"Son Güncelleme[: ]\s*([0-9\.]+\s*-\s*[0-9:]+)", raw_text)
-        if match_update:
-            dt = dateparser.parse(match_update.group(1), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
-            if dt:
-                updated_at = dt.isoformat()
-
-        # 4. Genel dd.MM.yyyy - HH:mm (prefixsiz)
-        if not published_at:
-            match = re.search(r"(\d{1,2}\.\d{1,2}\.\d{4})\s*-\s*(\d{1,2}:\d{2})", raw_text)
+            match = re.search(r"(\d{4})[-.](\d{1,2})[-.](\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?", raw_text)
             if match:
                 dt = dateparser.parse(match.group(0), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
-                if dt:
-                    published_at = dt.isoformat()
+                if dt: published_at = dt.isoformat()
 
-        # 5. Fallback → şimdi
+        # 3. Giriş Tarihi
+        if not published_at:
+            match = re.search(r"Giriş Tarihi[: ]+([0-9.\-:\s]+)", raw_text)
+            if match:
+                dt = dateparser.parse(match.group(1), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
+                if dt: published_at = dt.isoformat()
+
+        # 4. Son Güncelleme
+        match_update = re.search(r"Son Güncelleme[: ]+([0-9.\-:\s]+)", raw_text)
+        if match_update:
+            dt = dateparser.parse(match_update.group(1), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
+            if dt: updated_at = dt.isoformat()
+
+        # 5. dd.MM.yyyy - HH:mm
+        if not published_at:
+            match = re.search(r"(\d{1,2})\.(\d{1,2})\.(\d{4})\s*-\s*(\d{1,2}):(\d{2})", raw_text)
+            if match:
+                dt = dateparser.parse(match.group(0), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
+                if dt: published_at = dt.isoformat()
+
+        # 6. dd.MM.yyyy HH:mm
+        if not published_at:
+            match = re.search(r"(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})", raw_text)
+            if match:
+                dt = dateparser.parse(match.group(0), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
+                if dt: published_at = dt.isoformat()
+
+        # 7. Yayınlanma / Yayın Tarihi satırı
+        if not published_at:
+            match = re.search(r"(Yayınlanma|Yayın Tarihi)[: ]+([0-9.\-:\s]+)", raw_text)
+            if match:
+                dt = dateparser.parse(match.group(2), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
+                if dt: published_at = dt.isoformat()
+
+        # fallback
         if not published_at:
             published_at = datetime.now(LOCAL_TZ).isoformat()
 
@@ -503,7 +520,6 @@ def extract_meta_from_url(url):
 
     except Exception as e:
         return {"error": str(e)}
-
 
 # =================================================
 # API Endpoint'ler
