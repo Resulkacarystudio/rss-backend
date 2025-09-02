@@ -689,18 +689,25 @@ def get_db_connection():
         charset="utf8mb4",
         cursorclass=pymysql.cursors.DictCursor
     )
-
 @app.route("/save", methods=["POST"])
 def save_news():
     data = request.get_json()
     title = data.get("title")
     content = data.get("content")
     image = data.get("image")
-    published_at = data.get("published_at")  # Frontend’den gelen tarih
-    category = data.get("category")          # ✅ Frontend’den gelen kategori
+    published_at_raw = data.get("published_at")
+    category = data.get("category")
 
     if not title or not content:
         return jsonify({"error": "title ve content gerekli"}), 400
+
+    # ✅ Gelen tarihi normalize et
+    dt = parse_tr_date(published_at_raw) if published_at_raw else datetime.now(LOCAL_TZ)
+    if not dt:
+        dt = datetime.now(LOCAL_TZ)
+
+    # DB'ye yazarken standart format (datetime kolonuna güvenli):
+    published_at_db = dt.astimezone(LOCAL_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
     try:
         conn = get_db_connection()
@@ -709,12 +716,13 @@ def save_news():
                 INSERT INTO haberList (title, content, image, published_at, category, created_at)
                 VALUES (%s, %s, %s, %s, %s, NOW())
             """
-            cursor.execute(sql, (title, content, image, published_at, category))
+            cursor.execute(sql, (title, content, image, published_at_db, category))
         conn.commit()
         conn.close()
         return jsonify({"success": True, "message": "Haber kaydedildi"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
     
 
 @app.route("/news", methods=["GET"])
@@ -746,7 +754,7 @@ def get_saved_news():
 
             rows = cursor.fetchall()
 
-            # total count için
+            # total
             if category == "all":
                 cursor.execute("SELECT COUNT(*) as count FROM haberList")
             else:
@@ -754,10 +762,35 @@ def get_saved_news():
             total = cursor.fetchone()["count"]
 
         conn.close()
-        return jsonify({"success": True, "news": rows, "total": total})
+
+        # ✅ Her kaydın published_at'ını ISO'ya çevir
+        normalized = []
+        for r in rows:
+            dt = r.get("published_at")
+            iso_val = None
+
+            if isinstance(dt, datetime):
+                # Eğer naive ise TR varsay, sonra ISO üret
+                if dt.tzinfo is None:
+                    dt = LOCAL_TZ.localize(dt)
+                iso_val = dt.astimezone(LOCAL_TZ).isoformat()
+            elif isinstance(dt, str) and dt:
+                parsed = parse_tr_date(dt)
+                if parsed is None:
+                    # son çare: YYYY-MM-DD HH:MM:SS gibi ise elle ISO'ya çevir
+                    try:
+                        parsed = datetime.strptime(dt, "%Y-%m-%d %H:%M:%S")
+                        parsed = LOCAL_TZ.localize(parsed)
+                    except Exception:
+                        parsed = None
+                iso_val = parsed.astimezone(LOCAL_TZ).isoformat() if parsed else None
+
+            r["published_at"] = iso_val
+            normalized.append(r)
+
+        return jsonify({"success": True, "news": normalized, "total": total})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
-
 
 
 
