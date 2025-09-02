@@ -945,7 +945,8 @@ def save_ai_news(title, content, image, published_at, category):
     except Exception as e:
         print("Kaydetme hatası:", e)
 
-        @app.route("/news/id/<int:news_id>", methods=["GET"])
+        
+@app.route("/news/id/<int:news_id>", methods=["GET"])
 def get_news_by_id(news_id):
     try:
         conn = get_db_connection()
@@ -976,6 +977,9 @@ def get_news_by_id(news_id):
         return jsonify({"success": False, "error": "Haber bulunamadı"}), 404
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+
 
 def fetch_and_process(category="all"):
     print(f"🚀 {category} kategorisi için yeni haberler kontrol ediliyor...")
