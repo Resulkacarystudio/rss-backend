@@ -582,19 +582,16 @@ def extract_meta_from_url(url):
                 ],
             )
 
-        # 2) Metin içinden Türkçe etiketlerle (Sabah vb.)
+        # 2) Metin içinden Türkçe tarih etiketleri
         raw_text = soup.get_text(" ", strip=True)
-
         if not published_at:
             m = re.search(r"Giri(?:ş|s)\s*Tarihi[:\-\–]\s*([^\n\r|]+)", raw_text, flags=re.IGNORECASE)
             if m:
                 published_at = m.group(1).strip()
-
         if not published_at:
             m = re.search(r"(Yayınlanma|Yayın Tarihi)[:\-\–]\s*([^\n\r|]+)", raw_text, flags=re.IGNORECASE)
             if m:
                 published_at = m.group(2).strip()
-
         if not updated_at:
             m = re.search(r"(Son\s+Güncelleme|Güncellenme)[:\-\–]\s*([^\n\r|]+)", raw_text, flags=re.IGNORECASE)
             if m:
@@ -605,18 +602,25 @@ def extract_meta_from_url(url):
             m = re.search(r"(\d{1,2}\s+[A-Za-zçğıöşüÇĞİÖŞÜ]+\s+\d{4}\s+\d{1,2}:\d{2})", raw_text)
             if m:
                 published_at = m.group(1)
-
         if not published_at:
             m = re.search(r"(\d{1,2}\.\d{1,2}\.\d{4})\s*[-–]?\s*(\d{1,2}:\d{2})", raw_text)
             if m:
                 published_at = f"{m.group(1)} {m.group(2)}"
 
-        # 4) dateparser ile ISO formatına çevir
+        # 4) Tarihleri parse et
         dt_pub = parse_tr_date(published_at) if published_at else None
         dt_upd = parse_tr_date(updated_at) if updated_at else None
-
         if not dt_pub:
             dt_pub = datetime.now(LOCAL_TZ)
+
+        # 5) Haber içeriği (öncelikli olarak article/news-detail)
+        article = soup.find("div", class_="news-detail") or soup.find("article")
+        if article:
+            paragraphs = article.find_all("p")
+        else:
+            paragraphs = soup.find_all("p")
+        texts = [p.get_text(" ", strip=True) for p in paragraphs if p.get_text(strip=True)]
+        full_text = "\n".join(texts)
 
         return {
             "title": (title or "").strip(),
@@ -624,11 +628,12 @@ def extract_meta_from_url(url):
             "image": image,
             "publishedAt": dt_pub.isoformat(),
             "updatedAt": dt_upd.isoformat() if dt_upd else None,
-            "fullText": "\n".join([p.get_text() for p in soup.find_all("p") if p.get_text()]).strip(),
+            "fullText": full_text.strip(),
         }
 
     except Exception as e:
         return {"error": str(e)}
+
 
 # =================================================
 # API Endpoint'ler
@@ -891,17 +896,36 @@ def get_news_by_slug(slug):
 
 
 def news_exists(title, link):
+    """
+    Verilen haber başlığı veya link veritabanında varsa True döner.
+    Aynı haberin tekrar kaydedilmesini engeller.
+    """
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            sql = "SELECT id FROM haberList WHERE title = %s OR content LIKE %s LIMIT 1"
-            cursor.execute(sql, (title, f"%{link}%"))
+            # 🔹 Önce link üzerinden kontrol et (en güvenilir)
+            sql = "SELECT id FROM haberList WHERE link = %s LIMIT 1"
+            cursor.execute(sql, (link,))
             row = cursor.fetchone()
+            if row:
+                conn.close()
+                return True
+
+            # 🔹 Eğer link bulunmadıysa, başlık benzerliği üzerinden kontrol et
+            sql = "SELECT id FROM haberList WHERE LOWER(title) = LOWER(%s) LIMIT 1"
+            cursor.execute(sql, (title,))
+            row = cursor.fetchone()
+            if row:
+                conn.close()
+                return True
+
         conn.close()
-        return row is not None
+        return False
+
     except Exception as e:
         print("DB kontrol hatası:", e)
         return False
+
 
 
 def rewrite_with_ai(text):
