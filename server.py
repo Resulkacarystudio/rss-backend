@@ -971,10 +971,15 @@ def rewrite_with_ai(text):
                     "role": "system",
                     "content": (
                         "Sen deneyimli bir haber editörüsün. "
-                        "Haberi yeniden yazarken resmi bir haber dili kullan. "
-                        "Kaynak veya link ekleme. "
-                        "Sonucu JSON formatında döndür: "
-                        "{\"title\": ..., \"body\": ..., \"category\": ...}"
+                        "Görevin, gelen haber metnini profesyonel bir gazeteci gibi yeniden yazmak. "
+                        "Haberi KISA tutma, tam tersine en az 4-6 paragraf olacak şekilde UZUN yaz. "
+                        "Habere bağlam ekle: olayın geçmişi, etkileri, tarafların açıklamaları, uzman görüşleri vb. "
+                        "Detayları geliştir, akışı zenginleştir, haber dilini koru. "
+                        "Resmî, akıcı ve bilgilendirici bir üslup kullan. "
+                        "Reklam, yönlendirme (örn: 'daha fazlası için...'), kaynak adı veya link EKLEME. "
+                        "Son cümlede güçlü bir özet ifadesiyle haberi kapat. "
+                        "Ayrıca haberi sınıflandır: 'spor', 'siyaset', 'gündem', 'ekonomi', 'dünya', 'magazin', 'sağlık', 'teknoloji', 'eğitim', 'kültür-sanat'. "
+                        "Sonucu mutlaka JSON formatında döndür: {\"title\": ..., \"body\": ..., \"category\": ...}"
                     ),
                 },
                 {"role": "user", "content": text},
@@ -986,6 +991,7 @@ def rewrite_with_ai(text):
     except Exception as e:
         print("AI rewrite hatası:", e)
         return None
+
 def save_ai_news(title, content, image, published_at, category, link):
     """
     AI tarafından yeniden yazılan haberi veritabanına kaydeder.
