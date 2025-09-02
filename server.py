@@ -793,8 +793,93 @@ def get_saved_news():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+def news_exists(title, link):
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            sql = "SELECT id FROM haberList WHERE title = %s OR content LIKE %s LIMIT 1"
+            cursor.execute(sql, (title, f"%{link}%"))
+            row = cursor.fetchone()
+        conn.close()
+        return row is not None
+    except Exception as e:
+        print("DB kontrol hatası:", e)
+        return False
 
 
+def rewrite_with_ai(text):
+    try:
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Sen deneyimli bir haber editörüsün. "
+                        "Haberi yeniden yazarken resmi bir haber dili kullan. "
+                        "Kaynak veya link ekleme. "
+                        "Sonucu JSON formatında döndür: "
+                        "{\"title\": ..., \"body\": ..., \"category\": ...}"
+                    ),
+                },
+                {"role": "user", "content": text},
+            ],
+            response_format={"type": "json_object"},
+        )
+        raw = completion.choices[0].message.content
+        return json.loads(raw)
+    except Exception as e:
+        print("AI rewrite hatası:", e)
+        return None
+def save_ai_news(title, content, image, published_at, category):
+    try:
+        dt = parse_tr_date(published_at) if published_at else datetime.now(LOCAL_TZ)
+        if not dt:
+            dt = datetime.now(LOCAL_TZ)
+        published_at_db = dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            sql = """
+                INSERT INTO haberList (title, content, image, category, published_at, created_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+            """
+            cursor.execute(sql, (title, content, image, category, published_at_db))
+        conn.commit()
+        conn.close()
+        print(f"✅ Yeni haber kaydedildi: {title}")
+    except Exception as e:
+        print("Kaydetme hatası:", e)
+def fetch_and_process(category="all"):
+    print(f"🚀 {category} kategorisi için yeni haberler kontrol ediliyor...")
+    items = fetch_rss(category)
+
+    for item in items:
+        title = item["title"]
+        link = item["link"]
+        if news_exists(title, link):
+            continue  # zaten var
+
+        # ham içerik
+        raw_text = f"{title}\n\n{item.get('description') or ''}"
+
+        # yapay zekâya gönder
+        ai_result = rewrite_with_ai(raw_text)
+        if not ai_result:
+            continue
+
+        save_ai_news(
+            title=ai_result.get("title") or title,
+            content=ai_result.get("body") or (item.get("description") or ""),
+            image=item.get("image"),
+            published_at=item.get("published_at"),
+            category=ai_result.get("category") or category,
+        )
+@app.route("/cron")
+def run_cron():
+    category = request.args.get("category", "all")
+    fetch_and_process(category)
+    return jsonify({"status": "ok", "category": category})
 
 # =================================================
 # Main
