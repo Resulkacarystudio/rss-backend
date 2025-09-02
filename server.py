@@ -440,9 +440,8 @@ def parse_date(entry):
         dt = datetime.now(timezone.utc)
     return dt.astimezone(LOCAL_TZ)
 
-
 def extract_image_from_entry(entry):
-    """RSS içinden görsel URL'sini almaya çalışır (Milliyet, Hürriyet, NTV vs. için optimize edildi)"""
+    """RSS içinden görseli almaya çalışır, bulunamazsa sayfa içinden çeker."""
     try:
         # 1) Enclosure
         if hasattr(entry, "enclosures") and entry.enclosures:
@@ -478,10 +477,23 @@ def extract_image_from_entry(entry):
                     if img and img.get("src"):
                         return img["src"]
 
-    except Exception as e:
-        print("Görsel çıkarılamadı:", e)
+    except Exception:
+        pass
+
+    # 6) Fallback → RSS’te yoksa sayfa HTML’den og:image çek
+    try:
+        link = entry.get("link")
+        if link:
+            resp = requests.get(link, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+            soup = BeautifulSoup(resp.text, "html.parser")
+            og_image = soup.find("meta", property="og:image")
+            if og_image and og_image.get("content"):
+                return og_image["content"]
+    except Exception:
+        pass
 
     return None
+
 
 
 def fetch_single(source, info):
