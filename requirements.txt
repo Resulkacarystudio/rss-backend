@@ -7,3 +7,4 @@ pytz
 gunicorn
 openai>=1.0.0
 pymysql
+dateparser

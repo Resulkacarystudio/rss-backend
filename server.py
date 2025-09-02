@@ -15,6 +15,8 @@ import concurrent.futures
 from openai import OpenAI
 import pymysql
 import os
+import re
+import dateparser
 
 # =================================================
 # OpenAI client
@@ -454,27 +456,27 @@ def extract_meta_from_url(url):
         if meta_time and meta_time.get("content"):
             published_at = meta_time.get("content")
 
-        import re
         raw_text = soup.get_text(" ", strip=True)
 
-        # yyyy-MM-dd HH:mm:ss
+        # Eğer meta yoksa → metinden ara
         if not published_at:
-            match = re.search(r"(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?", raw_text)
-            if match:
-                year, month, day, hour, minute, second = match.groups()
-                second = second or "00"
-                dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second), tzinfo=LOCAL_TZ)
+            dt = dateparser.parse(
+                raw_text,
+                languages=["tr", "en"],
+                settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True}
+            )
+            if dt:
                 published_at = dt.isoformat()
 
-        # dd.MM.yyyy - HH:mm
+        # Eğer hala yoksa → regex fallback
         if not published_at:
-            match = re.search(r"(\d{2})\.(\d{2})\.(\d{4})\s*-\s*(\d{2}):(\d{2})", raw_text)
+            match = re.search(r"(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})", raw_text)
             if match:
                 day, month, year, hour, minute = match.groups()
                 dt = datetime(int(year), int(month), int(day), int(hour), int(minute), tzinfo=LOCAL_TZ)
                 published_at = dt.isoformat()
 
-        # fallback
+        # Son çare: şu anki zamanı ata
         if not published_at:
             published_at = datetime.now(LOCAL_TZ).isoformat()
 
@@ -486,13 +488,11 @@ def extract_meta_from_url(url):
             "title": title.strip() if title else "",
             "description": description.strip() if description else "",
             "image": image,
-            "publishedAt": published_at,
+            "publishedAt": published_at,   # ✅ artık ne bulursa ISO formatında
             "fullText": full_text.strip(),
         }
     except Exception as e:
         return {"error": str(e)}
-
-
 
 
 
