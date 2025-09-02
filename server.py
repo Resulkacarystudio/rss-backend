@@ -624,31 +624,39 @@ def get_db_connection():
         cursorclass=pymysql.cursors.DictCursor
     )
 
-@app.route("/save", methods=["POST"])
-def save_news():
-    data = request.get_json()
-    title = data.get("title")
-    content = data.get("content")
-    image = data.get("image")
-    published_at = data.get("published_at")  # Frontend’den gelen tarih
-    category = data.get("category")          # ✅ Frontend’den gelen kategori
-
-    if not title or not content:
-        return jsonify({"error": "title ve content gerekli"}), 400
-
+@app.route("/news", methods=["GET"])
+def get_saved_news():
     try:
+        limit = int(request.args.get("limit", 20))   # default 20
+        offset = int(request.args.get("offset", 0))  # default 0
+
         conn = get_db_connection()
         with conn.cursor() as cursor:
+            # toplam kayıt sayısı
+            cursor.execute("SELECT COUNT(*) AS total FROM haberList")
+            total = cursor.fetchone()["total"]
+
+            # sayfalı haberler
             sql = """
-                INSERT INTO haberList (title, content, image, published_at, category, created_at)
-                VALUES (%s, %s, %s, %s, %s, NOW())
+                SELECT id, title, content, image, category, published_at, created_at
+                FROM haberList
+                ORDER BY published_at DESC
+                LIMIT %s OFFSET %s
             """
-            cursor.execute(sql, (title, content, image, published_at, category))
-        conn.commit()
+            cursor.execute(sql, (limit, offset))
+            rows = cursor.fetchall()
         conn.close()
-        return jsonify({"success": True, "message": "Haber kaydedildi"})
+
+        return jsonify({
+            "success": True,
+            "total": total,   # ✅ frontend için toplam haber sayısı
+            "limit": limit,
+            "offset": offset,
+            "news": rows
+        })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
+
     
 
 @app.route("/news", methods=["GET"])
