@@ -630,7 +630,8 @@ def save_news():
     title = data.get("title")
     content = data.get("content")
     image = data.get("image")
-    published_at = data.get("published_at")  # 🔹 Frontend’den gelen tarih
+    published_at = data.get("published_at")  # Frontend’den gelen tarih
+    category = data.get("category")          # ✅ Frontend’den gelen kategori
 
     if not title or not content:
         return jsonify({"error": "title ve content gerekli"}), 400
@@ -639,15 +640,16 @@ def save_news():
         conn = get_db_connection()
         with conn.cursor() as cursor:
             sql = """
-                INSERT INTO haberList (title, content, image, published_at, created_at)
-                VALUES (%s, %s, %s, %s, NOW())
+                INSERT INTO haberList (title, content, image, published_at, category, created_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
             """
-            cursor.execute(sql, (title, content, image, published_at))
+            cursor.execute(sql, (title, content, image, published_at, category))
         conn.commit()
         conn.close()
         return jsonify({"success": True, "message": "Haber kaydedildi"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 # =================================================
