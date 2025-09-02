@@ -952,8 +952,13 @@ def rewrite_with_ai(text):
     except Exception as e:
         print("AI rewrite hatası:", e)
         return None
-def save_ai_news(title, content, image, published_at, category):
+def save_ai_news(title, content, image, published_at, category, link):
+    """
+    AI tarafından yeniden yazılan haberi veritabanına kaydeder.
+    Aynı link daha önce kaydedildiyse, UNIQUE constraint sayesinde hata verir.
+    """
     try:
+        # ✅ Tarihi normalize et
         dt = parse_tr_date(published_at) if published_at else datetime.now(LOCAL_TZ)
         if not dt:
             dt = datetime.now(LOCAL_TZ)
@@ -965,15 +970,21 @@ def save_ai_news(title, content, image, published_at, category):
         conn = get_db_connection()
         with conn.cursor() as cursor:
             sql = """
-                INSERT INTO haberList (title, slug, content, image, category, published_at, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                INSERT INTO haberList (title, slug, content, image, category, published_at, link, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
             """
-            cursor.execute(sql, (title, slug, content, image, category, published_at_db))
+            cursor.execute(sql, (title, slug, content, image, category, published_at_db, link))
         conn.commit()
         conn.close()
         print(f"✅ Yeni haber kaydedildi: {title}")
+
     except Exception as e:
-        print("Kaydetme hatası:", e)
+        # Eğer duplicate key hatası geldiyse görmezden gelebilirsin
+        if "Duplicate entry" in str(e):
+            print(f"⚠️ Haber zaten kayıtlı, atlandı: {title}")
+        else:
+            print("❌ Kaydetme hatası:", e)
+
 
         
 @app.route("/news/id/<int:news_id>", methods=["GET"])
