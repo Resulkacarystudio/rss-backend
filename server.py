@@ -1061,6 +1061,7 @@ def fetch_and_process(category="all", site=None):
                 image=item.get("image"),
                 published_at=item.get("published_at"),
                 category=ai_result.get("category") or category,
+                link=link, 
             )
         except Exception as e:
             print(f"❌ Hata oluştu ({title}):", e)
