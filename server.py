@@ -39,24 +39,40 @@ TR_SETTINGS = {
 def parse_tr_date(txt):
     if not txt:
         return None
-    try:
-        # Önce açıkça bilinen formatları dene
-        for fmt in ["%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M", "%d.%m.%Y"]:
-            try:
-                return datetime.strptime(txt, fmt).replace(tzinfo=LOCAL_TZ)
-            except ValueError:
-                continue
+    s = str(txt).strip()
 
-        # Eğer yukarıdakiler olmadıysa dateparser fallback
+    # 1) ISO formatı (2025-09-02T15:44:59+03:00 gibi)
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return dt.astimezone(LOCAL_TZ)
+    except Exception:
+        pass
+
+    # 2) dd.MM.yyyy veya dd.MM.yyyy HH:mm:ss
+    for fmt in ("%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(s, fmt).replace(tzinfo=LOCAL_TZ)
+        except Exception:
+            continue
+
+    # 3) dd/MM/yyyy gibi varyantlar
+    for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt).replace(tzinfo=LOCAL_TZ)
+        except Exception:
+            continue
+
+    # 4) Son çare: dateparser (Türkçe + DMY)
+    try:
         dt = dateparser.parse(
-            txt,
+            s,
             languages=["tr"],
             settings={
                 "TIMEZONE": "Europe/Istanbul",
                 "TO_TIMEZONE": "Europe/Istanbul",
                 "RETURN_AS_TIMEZONE_AWARE": True,
-                "DATE_ORDER": "DMY",  # Gün → Ay → Yıl
-                "STRICT_PARSING": True,
+                "PREFER_DATES_FROM": "past",
+                "DATE_ORDER": "DMY",
             },
         )
         return dt
