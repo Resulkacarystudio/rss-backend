@@ -442,23 +442,45 @@ def parse_date(entry):
 
 
 def extract_image_from_entry(entry):
-    """RSS içinden görseli almaya çalışır (farklı alanları da kontrol eder)"""
+    """RSS içinden görsel URL'sini almaya çalışır (Milliyet, Hürriyet, NTV vs. için optimize edildi)"""
     try:
-        if "enclosures" in entry and entry.enclosures:
-            href = entry.enclosures[0].get("href")
-            if href:
-                return href
-        if "media_content" in entry and entry.media_content:
-            return entry.media_content[0].get("url")
-        if "media_thumbnail" in entry and entry.media_thumbnail:
-            return entry.media_thumbnail[0].get("url")
-        if "summary" in entry:
+        # 1) Enclosure
+        if hasattr(entry, "enclosures") and entry.enclosures:
+            for enc in entry.enclosures:
+                if enc.get("href"):
+                    return enc["href"]
+
+        # 2) Media:content
+        if hasattr(entry, "media_content") and entry.media_content:
+            for mc in entry.media_content:
+                if mc.get("url"):
+                    return mc["url"]
+
+        # 3) Media:thumbnail
+        if hasattr(entry, "media_thumbnail") and entry.media_thumbnail:
+            for mt in entry.media_thumbnail:
+                if mt.get("url"):
+                    return mt["url"]
+
+        # 4) Summary içindeki <img>
+        if hasattr(entry, "summary") and entry.summary:
             soup = BeautifulSoup(entry.summary, "html.parser")
             img = soup.find("img")
             if img and img.get("src"):
                 return img["src"]
-    except Exception:
-        return None
+
+        # 5) Content içindeki <img>
+        if hasattr(entry, "content") and entry.content:
+            for c in entry.content:
+                if "value" in c:
+                    soup = BeautifulSoup(c["value"], "html.parser")
+                    img = soup.find("img")
+                    if img and img.get("src"):
+                        return img["src"]
+
+    except Exception as e:
+        print("Görsel çıkarılamadı:", e)
+
     return None
 
 
