@@ -32,17 +32,29 @@ TR_SETTINGS = {
     "TO_TIMEZONE": "Europe/Istanbul",
     "RETURN_AS_TIMEZONE_AWARE": True,
     "PREFER_DATES_FROM": "past",
-    "DATE_ORDER": "DMY",
+    "DATE_ORDER": "DMY",   # ✅ gün-ay-yıl
 }
+
 
 def parse_tr_date(txt):
     if not txt:
         return None
     try:
-        dt = dateparser.parse(txt, languages=["tr"], settings=TR_SETTINGS)
+        dt = dateparser.parse(
+            txt,
+            languages=["tr", "en"],   # Türkçe ve İngilizce tarih formatlarını anla
+            settings={
+                "TIMEZONE": "Europe/Istanbul",
+                "TO_TIMEZONE": "Europe/Istanbul",
+                "RETURN_AS_TIMEZONE_AWARE": True,
+                "PREFER_DATES_FROM": "past",
+                "DATE_ORDER": "DMY",  # Önce gün sonra ay
+            },
+        )
         return dt
     except Exception:
         return None
+
 
 def _first_meta(soup, selectors):
     """Belirtilen meta etiketlerinden ilk bulduğunu döndürür"""
