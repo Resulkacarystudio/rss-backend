@@ -10,6 +10,8 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import pytz
+from dateutil import tz
+
 import os
 import concurrent.futures
 from openai import OpenAI
@@ -17,14 +19,71 @@ import pymysql
 import os
 import re
 import dateparser
+import json
+
 
 # =================================================
 # OpenAI client
 # =================================================
 # Railway dashboard → Variables → OPENAI_API_KEY tanımlanmalı
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+TR_SETTINGS = {
+    "TIMEZONE": "Europe/Istanbul",
+    "TO_TIMEZONE": "Europe/Istanbul",
+    "RETURN_AS_TIMEZONE_AWARE": True,
+    "PREFER_DATES_FROM": "past",
+    "DATE_ORDER": "DMY",
+}
 
-# =================================================
+def parse_tr_date(txt):
+    if not txt:
+        return None
+    try:
+        dt = dateparser.parse(txt, languages=["tr"], settings=TR_SETTINGS)
+        return dt
+    except Exception:
+        return None
+
+def _first_meta(soup, selectors):
+    """Belirtilen meta etiketlerinden ilk bulduğunu döndürür"""
+    for attr, val in selectors:
+        el = soup.find("meta", {attr: val})
+        if el and (el.get("content") or el.get("value")):
+            return el.get("content") or el.get("value")
+    return None
+
+def _first_time(soup):
+    t = soup.find("time", attrs={"datetime": True})
+    if t:
+        return t.get("datetime")
+    t = soup.find(attrs={"itemprop": "datePublished"})
+    if t and (t.get("datetime") or t.get("content") or t.text):
+        return t.get("datetime") or t.get("content") or t.get_text(strip=True)
+    return None
+
+def _jsonld_dates(soup):
+    """JSON-LD içinden datePublished / dateModified çek"""
+    for script in soup.find_all("script", {"type": "application/ld+json"}):
+        try:
+            data = json.loads(script.string or script.text or "{}")
+        except Exception:
+            continue
+        candidates = data if isinstance(data, list) else [data]
+        for obj in candidates:
+            t = obj.get("@type") or obj.get("type")
+            if isinstance(t, list):
+                is_article = any(typ in ("NewsArticle", "Article") for typ in t)
+            else:
+                is_article = t in ("NewsArticle", "Article")
+            if is_article:
+                pub = obj.get("datePublished")
+                upd = obj.get("dateModified")
+                if pub or upd:
+                    return pub, upd
+    return None, None
+
+# ==============
+# ===================================
 # Flask App & CORS
 # =================================================
 app = Flask(__name__)
@@ -430,7 +489,7 @@ def extract_meta_from_url(url):
     try:
         resp = requests.get(
             url,
-            timeout=10,
+            timeout=12,
             headers={
                 "User-Agent": "Mozilla/5.0",
                 "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
@@ -439,83 +498,90 @@ def extract_meta_from_url(url):
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Başlık
+        # Başlık / açıklama / görsel
         title = soup.find("meta", property="og:title")
         title = title.get("content") if title else (soup.title.string if soup.title else "Başlık bulunamadı")
-
-        # Açıklama
         description = soup.find("meta", property="og:description")
         description = description.get("content") if description else ""
-
-        # Görsel
         image = soup.find("meta", property="og:image")
         image = image.get("content") if image else None
-
-        raw_text = soup.get_text(" ", strip=True)
 
         published_at = None
         updated_at = None
 
-        # 1. Meta published_time
-        meta_time = soup.find("meta", property="article:published_time")
-        if meta_time and meta_time.get("content"):
-            published_at = meta_time.get("content")
+        # 0) JSON-LD
+        pub_jsonld, upd_jsonld = _jsonld_dates(soup)
+        if pub_jsonld and not published_at:
+            published_at = pub_jsonld
+        if upd_jsonld and not updated_at:
+            updated_at = upd_jsonld
 
-        # 2. YYYY-MM-DD HH:MM:SS
+        # 1) Meta etiketleri
         if not published_at:
-            match = re.search(r"(\d{4})[-.](\d{1,2})[-.](\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?", raw_text)
-            if match:
-                dt = dateparser.parse(match.group(0), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
-                if dt: published_at = dt.isoformat()
+            published_at = _first_meta(
+                soup,
+                [
+                    ("property", "article:published_time"),
+                    ("name", "pubdate"),
+                    ("name", "publishdate"),
+                    ("name", "publish-date"),
+                    ("itemprop", "datePublished"),
+                ],
+            ) or _first_time(soup)
 
-        # 3. Giriş Tarihi
+        if not updated_at:
+            updated_at = _first_meta(
+                soup,
+                [
+                    ("property", "article:modified_time"),
+                    ("name", "lastmod"),
+                    ("itemprop", "dateModified"),
+                ],
+            )
+
+        # 2) Metin içinden Türkçe etiketlerle (Sabah vb.)
+        raw_text = soup.get_text(" ", strip=True)
+
         if not published_at:
-            match = re.search(r"Giriş Tarihi[: ]+([0-9.\-:\s]+)", raw_text)
-            if match:
-                dt = dateparser.parse(match.group(1), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
-                if dt: published_at = dt.isoformat()
+            m = re.search(r"Giri(?:ş|s)\s*Tarihi[:\-\–]\s*([^\n\r|]+)", raw_text, flags=re.IGNORECASE)
+            if m:
+                published_at = m.group(1).strip()
 
-        # 4. Son Güncelleme
-        match_update = re.search(r"Son Güncelleme[: ]+([0-9.\-:\s]+)", raw_text)
-        if match_update:
-            dt = dateparser.parse(match_update.group(1), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
-            if dt: updated_at = dt.isoformat()
-
-        # 5. dd.MM.yyyy - HH:mm
         if not published_at:
-            match = re.search(r"(\d{1,2})\.(\d{1,2})\.(\d{4})\s*-\s*(\d{1,2}):(\d{2})", raw_text)
-            if match:
-                dt = dateparser.parse(match.group(0), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
-                if dt: published_at = dt.isoformat()
+            m = re.search(r"(Yayınlanma|Yayın Tarihi)[:\-\–]\s*([^\n\r|]+)", raw_text, flags=re.IGNORECASE)
+            if m:
+                published_at = m.group(2).strip()
 
-        # 6. dd.MM.yyyy HH:mm
+        if not updated_at:
+            m = re.search(r"(Son\s+Güncelleme|Güncellenme)[:\-\–]\s*([^\n\r|]+)", raw_text, flags=re.IGNORECASE)
+            if m:
+                updated_at = m.group(2).strip()
+
+        # 3) Genel tarih kalıpları
         if not published_at:
-            match = re.search(r"(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})", raw_text)
-            if match:
-                dt = dateparser.parse(match.group(0), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
-                if dt: published_at = dt.isoformat()
+            m = re.search(r"(\d{1,2}\s+[A-Za-zçğıöşüÇĞİÖŞÜ]+\s+\d{4}\s+\d{1,2}:\d{2})", raw_text)
+            if m:
+                published_at = m.group(1)
 
-        # 7. Yayınlanma / Yayın Tarihi satırı
         if not published_at:
-            match = re.search(r"(Yayınlanma|Yayın Tarihi)[: ]+([0-9.\-:\s]+)", raw_text)
-            if match:
-                dt = dateparser.parse(match.group(2), languages=["tr"], settings={"TIMEZONE": "Europe/Istanbul", "RETURN_AS_TIMEZONE_AWARE": True})
-                if dt: published_at = dt.isoformat()
+            m = re.search(r"(\d{1,2}\.\d{1,2}\.\d{4})\s*[-–]?\s*(\d{1,2}:\d{2})", raw_text)
+            if m:
+                published_at = f"{m.group(1)} {m.group(2)}"
 
-        # fallback
-        if not published_at:
-            published_at = datetime.now(LOCAL_TZ).isoformat()
+        # 4) dateparser ile ISO formatına çevir
+        dt_pub = parse_tr_date(published_at) if published_at else None
+        dt_upd = parse_tr_date(updated_at) if updated_at else None
 
-        # İçerik
-        full_text = "\n".join([p.get_text() for p in soup.find_all("p") if p.get_text()])
+        if not dt_pub:
+            dt_pub = datetime.now(LOCAL_TZ)
 
         return {
-            "title": title.strip() if title else "",
-            "description": description.strip(),
+            "title": (title or "").strip(),
+            "description": (description or "").strip(),
             "image": image,
-            "publishedAt": published_at,
-            "updatedAt": updated_at,
-            "fullText": full_text.strip(),
+            "publishedAt": dt_pub.isoformat(),
+            "updatedAt": dt_upd.isoformat() if dt_upd else None,
+            "fullText": "\n".join([p.get_text() for p in soup.find_all("p") if p.get_text()]).strip(),
         }
 
     except Exception as e:
@@ -653,31 +719,45 @@ def save_news():
 
 @app.route("/news", methods=["GET"])
 def get_saved_news():
-    """Veritabanındaki haberleri getir (sayfalama destekli)"""
     try:
-        limit = int(request.args.get("limit", 20))   # default 20
+        category = request.args.get("category", "all")
+        limit = int(request.args.get("limit", 20))
         offset = int(request.args.get("offset", 0))
 
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            # Toplam kaç kayıt var?
-            cursor.execute("SELECT COUNT(*) AS total FROM haberList")
-            total = cursor.fetchone()["total"]
+            if category == "all":
+                sql = """
+                    SELECT id, title, content, image, category, published_at, created_at
+                    FROM haberList
+                    ORDER BY published_at DESC
+                    LIMIT %s OFFSET %s
+                """
+                cursor.execute(sql, (limit, offset))
+            else:
+                sql = """
+                    SELECT id, title, content, image, category, published_at, created_at
+                    FROM haberList
+                    WHERE category = %s
+                    ORDER BY published_at DESC
+                    LIMIT %s OFFSET %s
+                """
+                cursor.execute(sql, (category, limit, offset))
 
-            # Sayfalı veriler
-            sql = """
-                SELECT id, title, content, image, category, published_at, created_at
-                FROM haberList
-                ORDER BY published_at DESC
-                LIMIT %s OFFSET %s
-            """
-            cursor.execute(sql, (limit, offset))
             rows = cursor.fetchall()
-        conn.close()
 
+            # total count için
+            if category == "all":
+                cursor.execute("SELECT COUNT(*) as count FROM haberList")
+            else:
+                cursor.execute("SELECT COUNT(*) as count FROM haberList WHERE category = %s", (category,))
+            total = cursor.fetchone()["count"]
+
+        conn.close()
         return jsonify({"success": True, "news": rows, "total": total})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
 
 
 
