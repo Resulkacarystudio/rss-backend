@@ -508,14 +508,20 @@ def dedupe_items(items):
     return unique
 
 
-def fetch_rss(category="all"):
-    """Kategorideki tüm kaynaklardan haberleri getir"""
+def fetch_rss(category="all", site=None):
+    """Kategorideki tüm kaynaklardan veya sadece tek bir siteden haberleri getir"""
     items = []
     sources = RSS_CATEGORIES.get(category, RSS_CATEGORIES["all"])
+
+    # Eğer sadece belirli bir site seçildiyse
+    if site and site in sources:
+        sources = {site: sources[site]}
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = [executor.submit(fetch_single, source, info) for source, info in sources.items()]
         for f in concurrent.futures.as_completed(futures):
             items.extend(f.result())
+
     items = dedupe_items(items)
     items.sort(key=lambda x: x["published_at_ms"], reverse=True)
     return items
@@ -982,9 +988,9 @@ def get_news_by_id(news_id):
 
 
 
-def fetch_and_process(category="all"):
-    print(f"🚀 {category} kategorisi için yeni haberler kontrol ediliyor...")
-    items = fetch_rss(category)
+def fetch_and_process(category="all", site=None):
+    print(f"🚀 {category} kategorisi ({site or 'tüm siteler'}) için yeni haberler kontrol ediliyor...")
+    items = fetch_rss(category, site)  # site filtresi ekledik
 
     for item in items:
         try:
@@ -1024,6 +1030,7 @@ def fetch_and_process(category="all"):
         except Exception as e:
             print(f"❌ Hata oluştu ({title}):", e)
             continue
+
 
 @app.route("/cron")
 def run_cron():
