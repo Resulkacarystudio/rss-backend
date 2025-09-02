@@ -653,23 +653,26 @@ def save_news():
 
 @app.route("/news", methods=["GET"])
 def get_saved_news():
-    """Veritabanındaki haberleri getir"""
     try:
+        limit = int(request.args.get("limit", 20))   # default 20
+        offset = int(request.args.get("offset", 0))  # default 0
+
         conn = get_db_connection()
         with conn.cursor() as cursor:
             sql = """
-               SELECT id, title, content, image, category, published_at, created_at
-FROM haberList
-ORDER BY published_at DESC
-
+                SELECT id, title, content, image, category, published_at, created_at
+                FROM haberList
+                ORDER BY published_at DESC
+                LIMIT %s OFFSET %s
             """
-            cursor.execute(sql)
+            cursor.execute(sql, (limit, offset))
             rows = cursor.fetchall()
         conn.close()
 
         return jsonify({"success": True, "news": rows})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
 
 
 
