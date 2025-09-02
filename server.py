@@ -650,7 +650,7 @@ def save_news():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-    
+
 @app.route("/news", methods=["GET"])
 def get_saved_news():
     """Veritabanındaki haberleri getir"""
@@ -658,10 +658,10 @@ def get_saved_news():
         conn = get_db_connection()
         with conn.cursor() as cursor:
             sql = """
-                SELECT id, title, content, image, category, published_at, created_at
-                FROM haberList
-                ORDER BY published_at DESC
-                LIMIT 50
+               SELECT id, title, content, image, category, published_at, created_at
+FROM haberList
+ORDER BY published_at DESC
+
             """
             cursor.execute(sql)
             rows = cursor.fetchall()
